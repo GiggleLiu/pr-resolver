@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean
+.PHONY: help update status start stop restart list clean init-claude
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -23,6 +23,7 @@ help:
 	@echo "  make restart                 # Restart all runners"
 	@echo "  make list                    # List configured repos"
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
+	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
 	@echo "Runners: $(BASE_DIR)"
@@ -106,3 +107,22 @@ clean:
 	@echo "After:  $$(du -sh $(BASE_DIR) | cut -f1)"
 	@echo ""
 	@echo "Note: _work/_tool/ kept (cached tools). To remove: rm -rf $(BASE_DIR)/*/_work/_tool"
+
+init-claude:
+	@echo "Checking Claude CLI and superpowers setup..."
+	@echo ""
+	@if command -v claude &> /dev/null; then \
+		echo "Claude CLI: $$(claude --version 2>/dev/null || echo 'installed')"; \
+	else \
+		echo "Claude CLI: not found, installing..."; \
+		npm install -g @anthropic-ai/claude-code; \
+	fi
+	@echo ""
+	@if claude plugins list 2>/dev/null | grep -q superpowers; then \
+		echo "Superpowers: installed"; \
+	else \
+		echo "Superpowers: not found, installing..."; \
+		claude plugins add anthropics/claude-code-superpowers --yes; \
+	fi
+	@echo ""
+	@echo "Done."
