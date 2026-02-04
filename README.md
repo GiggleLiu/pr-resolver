@@ -208,20 +208,6 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/your-repo/.env
 - Check Actions tab for any errors
 - Verify your comment starts with `[action]` (case-sensitive)
 
-## Alternative: Webhook Server
-
-For advanced users who need real-time webhooks instead of GitHub Actions polling:
-
-```bash
-# Setup (requires cloudflared)
-make setup
-make services-start
-
-# Uses Cloudflare Tunnel for webhook delivery
-```
-
-See [webhook documentation](.claude/scripts/README.md) for details.
-
 ## License
 
 MIT
