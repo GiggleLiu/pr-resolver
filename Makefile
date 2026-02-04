@@ -155,20 +155,37 @@ round-trip:
 	echo "Step 3: Trigger [action]..."; \
 	gh pr comment $$PR_NUM --body "[action]"; \
 	echo ""; \
-	echo "Step 4: Waiting for workflow..."; \
-	sleep 5; \
-	RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId'); \
-	echo "Workflow run: $$RUN_ID"; \
-	gh run watch $$RUN_ID || true; \
+	echo "Step 4: Waiting for [action] workflow..."; \
+	for i in 1 2 3 4 5 6; do \
+		sleep 5; \
+		RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
+		[ -n "$$RUN_ID" ] && break; \
+		echo "  waiting for workflow to start..."; \
+	done; \
+	if [ -n "$$RUN_ID" ]; then \
+		echo "  Workflow: $$RUN_ID"; \
+		gh run watch $$RUN_ID --exit-status || echo "  Workflow completed (check status)"; \
+	else \
+		echo "  Warning: Could not find workflow run"; \
+	fi; \
 	echo ""; \
 	echo "Step 5: Trigger [fix]..."; \
 	gh pr comment $$PR_NUM --body "[fix] Clean up the plan file after test."; \
+	PREV_RUN=$$RUN_ID; \
 	echo ""; \
-	echo "Step 6: Waiting for fix workflow..."; \
-	sleep 5; \
-	RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId'); \
-	echo "Workflow run: $$RUN_ID"; \
-	gh run watch $$RUN_ID || true; \
+	echo "Step 6: Waiting for [fix] workflow..."; \
+	for i in 1 2 3 4 5 6; do \
+		sleep 5; \
+		RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
+		[ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ] && break; \
+		echo "  waiting for workflow to start..."; \
+	done; \
+	if [ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ]; then \
+		echo "  Workflow: $$RUN_ID"; \
+		gh run watch $$RUN_ID --exit-status || echo "  Workflow completed (check status)"; \
+	else \
+		echo "  Warning: Could not find workflow run"; \
+	fi; \
 	echo ""; \
 	echo "Step 7: Close PR..."; \
 	gh pr close $$PR_NUM --delete-branch; \
