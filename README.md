@@ -15,6 +15,17 @@ Automate PR workflows with Claude Code using a plan-driven development approach.
 
 This enables a "write the plan, not the code" workflow where you describe **what** to build and Claude handles the implementation.
 
+### Works with Superpowers Toolkit
+
+Combine with [claude-superpowers](https://github.com/anthropics/claude-superpowers) for end-to-end automation:
+
+```
+/superpowers:brainstorming  →  Design the feature interactively
+/superpowers:writing-plans  →  Generate detailed implementation plan
+git push & create PR        →  Push plan to a new branch
+[action]                    →  Claude executes the plan autonomously
+```
+
 ## Features
 
 - **Event-driven**: GitHub webhooks trigger jobs instantly (no polling)
