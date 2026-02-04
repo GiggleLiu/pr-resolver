@@ -1,6 +1,6 @@
 # PR Automation
 
-**Let Claude implement your plans.** Write a plan, open a PR, comment `[action]` — Claude executes it.
+Github action runner that **use claude superpower to implement your plans.** Write a plan, open a PR, comment `[action]` — Claude executes it.
 
 This is plan-driven development: you think, Claude codes.
 
