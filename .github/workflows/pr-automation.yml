@@ -37,10 +37,18 @@ jobs:
 
             const body = context.payload.comment.body;
             let command = 'unknown';
-            if (body.startsWith('[action]')) command = 'action';
-            else if (body.startsWith('[fix]')) command = 'fix';
-            else if (body.startsWith('[debug]')) command = 'debug';
+            let instructions = '';
+            if (body.startsWith('[action]')) {
+              command = 'action';
+              instructions = body.slice('[action]'.length).trim();
+            } else if (body.startsWith('[fix]')) {
+              command = 'fix';
+              instructions = body.slice('[fix]'.length).trim();
+            } else if (body.startsWith('[debug]')) {
+              command = 'debug';
+            }
             core.setOutput('command', command);
+            core.setOutput('instructions', instructions);
 
             // Set pending status immediately
             await github.rest.repos.createCommitStatus({
@@ -92,9 +100,13 @@ jobs:
         run: |
           # Use secret if set, otherwise use runner's env
           [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
+          INSTRUCTIONS='${{ steps.pr.outputs.instructions }}'
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
-
+          ${INSTRUCTIONS:+
+          ## Additional Instructions
+          $INSTRUCTIONS
+          }
           ## Process
           1. Read the plan file
           2. Use /subagent-driven-development to execute tasks
@@ -133,9 +145,13 @@ jobs:
           $(gh run view $run_id --log-failed 2>/dev/null | tail -100 || echo 'Could not fetch logs')"
           done
 
+          INSTRUCTIONS='${{ steps.pr.outputs.instructions }}'
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Fix all issues with this PR: review comments AND CI failures.
-
+          ${INSTRUCTIONS:+
+          ## Additional Instructions
+          $INSTRUCTIONS
+          }
           === Inline Code Comments ===
           $INLINE
 
