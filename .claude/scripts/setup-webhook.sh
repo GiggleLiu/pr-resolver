@@ -96,13 +96,14 @@ echo ""
 TUNNEL_CONFIG="$HOME/.cloudflared/config.yml"
 mkdir -p "$HOME/.cloudflared"
 
+# Ingress with no hostname = catch-all for the default URL (https://<tunnel-id>.cfargotunnel.com).
+# No DNS setup required - Cloudflare owns cfargotunnel.com.
 cat > "$TUNNEL_CONFIG" << EOF
 tunnel: $TUNNEL_ID
 credentials-file: $HOME/.cloudflared/$TUNNEL_ID.json
 
 ingress:
-  - hostname: pr-webhook.example.com
-    service: http://localhost:8787
+  - service: http://localhost:8787
   - service: http_status:404
 EOF
 

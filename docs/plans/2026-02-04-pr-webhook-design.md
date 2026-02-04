@@ -137,22 +137,39 @@ Runs in same process, processes jobs sequentially:
 
 Exposes localhost:8787 to the internet with HTTPS.
 
-**Setup:**
-```bash
-brew install cloudflared
-cloudflared tunnel login
-cloudflared tunnel create pr-webhook
-cloudflared tunnel --url http://localhost:8787 run pr-webhook
-```
+**Two Options:**
 
-**Result:** `https://pr-webhook-<id>.cfargotunnel.com`
+1. **Quick Tunnel (for testing)** - URL changes on restart
+   ```bash
+   cloudflared tunnel --url http://localhost:8787
+   # Outputs: https://random-words.trycloudflare.com
+   ```
+
+2. **Named Tunnel (for production)** - Requires Cloudflare DNS setup
+   ```bash
+   cloudflared tunnel login
+   cloudflared tunnel create pr-webhook
+   # Then configure DNS in Cloudflare dashboard:
+   # Add CNAME record: webhook.yourdomain.com → <tunnel-id>.cfargotunnel.com
+   cloudflared tunnel run pr-webhook
+   ```
+
+**Note:** The `*.cfargotunnel.com` URL does NOT work directly for named tunnels.
+You must configure a DNS CNAME record pointing to the tunnel, OR use Quick Tunnel mode.
 
 ### GitHub Webhook Configuration
 
-- URL: `https://pr-webhook-<id>.cfargotunnel.com/webhook`
+- URL: `https://<your-tunnel-url>/webhook`
 - Content type: `application/json`
 - Secret: Random string stored in config
 - Events: "Issue comments" only
+
+Create webhooks via CLI:
+```bash
+gh api repos/OWNER/REPO/hooks --method POST --input - <<EOF
+{"config":{"url":"$URL","content_type":"json","secret":"$SECRET"},"events":["issue_comment"],"active":true}
+EOF
+```
 
 ## Commands
 
@@ -216,9 +233,35 @@ progress_interval_minutes = 5
 max_turns = 100
 
 [paths]
-workspace = "/Users/jinguomini/rcode"
-log_dir = "/Users/jinguomini/rcode/.claude/logs"
+log_dir = "~/.claude/logs"
+
+# Option 1: Scan a directory for repos
+[repos_dir]
+path = "~/projects"
+max_depth = 2
+
+# Option 2: Explicit repo list
+# [[repos]]
+# github = "owner/repo"
+# path = "~/projects/repo"
 ```
+
+## Known Issues & Solutions
+
+### PATH Not Found for gh/git/claude
+The server runs with a minimal PATH. Solution: `SUBPROCESS_ENV` dict in server.py:
+```python
+SUBPROCESS_ENV = {
+    **os.environ,
+    "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + os.environ.get("PATH", ""),
+}
+```
+All `subprocess.run()` calls must use `env=SUBPROCESS_ENV`.
+
+### Named Tunnel URL Not Working
+Named tunnels (created with `cloudflared tunnel create`) require DNS configuration.
+The `*.cfargotunnel.com` URL only resolves after adding a CNAME record in Cloudflare DNS.
+For testing, use Quick Tunnel instead: `cloudflared tunnel --url http://localhost:8787`
 
 ## Services (macOS LaunchAgents)
 

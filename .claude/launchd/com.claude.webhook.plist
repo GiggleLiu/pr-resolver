@@ -14,7 +14,7 @@
         <key>WEBHOOK_CONFIG</key>
         <string>/Users/jinguomini/server/pr-resolver/.claude/webhook/config.toml</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/Users/jinguomini/.local/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/jinguomini/.local/bin</string>
     </dict>
     <key>WorkingDirectory</key>
     <string>/Users/jinguomini/server/pr-resolver/.claude/webhook</string>

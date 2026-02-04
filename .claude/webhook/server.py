@@ -113,6 +113,7 @@ def get_github_remote(repo_path: Path) -> Optional[str]:
             cwd=repo_path,
             capture_output=True,
             timeout=5,
+            env=SUBPROCESS_ENV,
         )
         if result.returncode == 0:
             url = result.stdout.decode().strip()
@@ -304,6 +305,14 @@ def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
 
     return hmac.compare_digest(f"sha256={expected}", signature)
 
+
+# Environment for subprocess calls (ensure gh/git/claude are found)
+SUBPROCESS_ENV = {
+    **os.environ,
+    "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + os.environ.get("PATH", ""),
+}
+
+
 def post_comment(repo: str, pr_number: int, body: str, logger: logging.Logger):
     """Post a comment on a PR using gh CLI."""
     try:
@@ -312,6 +321,7 @@ def post_comment(repo: str, pr_number: int, body: str, logger: logging.Logger):
             check=True,
             capture_output=True,
             timeout=30,
+            env=SUBPROCESS_ENV,
         )
         logger.info(f"Posted comment to {repo}#{pr_number}")
     except subprocess.CalledProcessError as e:
@@ -327,6 +337,7 @@ def get_pr_branch(repo: str, pr_number: int) -> Optional[str]:
             check=True,
             capture_output=True,
             timeout=30,
+            env=SUBPROCESS_ENV,
         )
         return result.stdout.decode().strip()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -415,6 +426,7 @@ class Worker:
                     check=True,
                     capture_output=True,
                     timeout=300,
+                    env=SUBPROCESS_ENV,
                 )
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 error_msg = f"Failed to clone repository: {e}"
@@ -431,6 +443,7 @@ class Worker:
                 check=True,
                 capture_output=True,
                 timeout=120,
+                env=SUBPROCESS_ENV,
             )
             subprocess.run(
                 ["git", "checkout", branch],
@@ -438,6 +451,7 @@ class Worker:
                 check=True,
                 capture_output=True,
                 timeout=30,
+                env=SUBPROCESS_ENV,
             )
             subprocess.run(
                 ["git", "pull", "origin", branch],
@@ -445,6 +459,7 @@ class Worker:
                 check=True,
                 capture_output=True,
                 timeout=120,
+                env=SUBPROCESS_ENV,
             )
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             error_msg = f"Failed to checkout branch: {e}"
@@ -477,6 +492,7 @@ class Worker:
                 cwd=repo_dir,
                 capture_output=True,
                 timeout=timeout_minutes * 60,
+                env=SUBPROCESS_ENV,
             )
 
             if result.returncode == 0:
@@ -538,6 +554,7 @@ Do NOT post comments to the PR - the system will handle that.
                 ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments", "--jq", '.[].body'],
                 capture_output=True,
                 timeout=30,
+                env=SUBPROCESS_ENV,
             )
             inline_comments = result.stdout.decode() if result.returncode == 0 else ""
         except:
@@ -548,6 +565,7 @@ Do NOT post comments to the PR - the system will handle that.
                 ["gh", "api", f"repos/{repo}/pulls/{pr_number}/reviews", "--jq", '.[] | select(.body != "") | .body'],
                 capture_output=True,
                 timeout=30,
+                env=SUBPROCESS_ENV,
             )
             review_comments = result.stdout.decode() if result.returncode == 0 else ""
         except:

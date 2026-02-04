@@ -15,6 +15,8 @@ Automatically process pending PRs across all repositories under the current fold
    - `[action]` - Execute the plan file
    - `[fix]` - Address PR review comments
 
+**Approach:** Use the **subagent-driven-development** superpower when executing plans: read the plan, extract tasks, dispatch a fresh subagent per task, and run two-stage review (spec compliance then code quality) after each task. Do not execute the whole plan in one monolithic pass.
+
 ## Execution Steps
 
 ### Step 1: Discover Repositories
@@ -60,16 +62,11 @@ When `[action]` is found in a new comment:
    gh pr comment <number> --body "[executing] Starting plan execution..."
    ```
 
-   Then use the Task tool with subagent to execute the plan:
-   ```
-   Task(subagent_type="general-purpose", prompt="
-     Execute the plan in <plan-file-path>.
-     - Read the plan file
-     - Implement each step
-     - Run tests with: make test or cargo test
-     - Stage and commit changes
-   ")
-   ```
+   Then execute the plan using the **subagent-driven-development** superpower:
+   - Read the plan file and use the subagent-driven-development skill (do not use a single Task with a generic "execute the plan" prompt).
+   - Extract tasks from the plan, create a TodoWrite, and dispatch a **fresh subagent per task**.
+   - After each task: run spec-compliance review, then code-quality review; fix and re-review until approved before moving to the next task.
+   - When all tasks are done, run a final code review and use finishing-a-development-branch if appropriate.
 
    After completion:
    ```bash
@@ -181,6 +178,7 @@ Or with a cron job:
 
 ## Implementation Notes
 
+- **Plan execution:** Use the subagent-driven-development superpower (fresh subagent per task + two-stage review), not a single monolithic Task.
 - Always check for new commands AFTER the last status comment to avoid re-processing
 - Use `--json` output from `gh` for reliable parsing
 - Verify repo has proper git remote before attempting PR operations
