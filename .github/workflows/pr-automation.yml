@@ -93,17 +93,23 @@ jobs:
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
 
-          Instructions:
+          ## Process
           1. Read the plan file carefully
-          2. Implement each step in order
-          3. Commit changes with descriptive messages
-          4. Push changes: git push origin ${{ steps.pr.outputs.branch }}
-          5. Post a summary comment on the PR using:
-             gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
-             Replace SUMMARY with a brief markdown summary of what you did (files changed, features added, etc.)
+          2. Break it into discrete tasks
+          3. For each task:
+             - Implement the change
+             - Run tests if available (make test, cargo test, npm test, etc.)
+             - Commit with descriptive message
+          4. Push: git push origin ${{ steps.pr.outputs.branch }}
+          5. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
+
+          ## Rules
+          - Read existing code before modifying
+          - Only implement what is in the plan (no scope creep)
+          - Stop and report if a step fails
           " 2>&1 | tee claude-output.txt
 
-      - name: Fix review comments
+      - name: Fix issues
         if: steps.pr.outputs.command == 'fix'
         env:
           ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -111,26 +117,49 @@ jobs:
         run: |
           # Use secret if set, otherwise use runner's env
           [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
+
+          # Gather review comments
           INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments --jq '.[].body' 2>/dev/null || echo "")
           REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews --jq '.[] | select(.body != "") | .body' 2>/dev/null || echo "")
 
+          # Gather CI status
+          CI_STATUS=$(gh pr checks ${{ github.event.issue.number }} --repo ${{ github.repository }} 2>/dev/null || echo "")
+          FAILED_RUNS=$(gh run list --branch ${{ steps.pr.outputs.branch }} --status failure --limit 3 --json databaseId,name --jq '.[] | "\(.databaseId) \(.name)"' 2>/dev/null || echo "")
+
+          # Get failed run logs if any
+          CI_LOGS=""
+          for run_id in $(echo "$FAILED_RUNS" | cut -d' ' -f1); do
+            [ -n "$run_id" ] && CI_LOGS="$CI_LOGS
+          --- Run $run_id ---
+          $(gh run view $run_id --log-failed 2>/dev/null | tail -100 || echo 'Could not fetch logs')"
+          done
+
           claude --dangerously-skip-permissions --max-turns 100 -p "
-          Address the PR review comments.
+          Fix all issues with this PR: review comments AND CI failures.
 
-          === Inline Review Comments ===
+          === Review Comments ===
           $INLINE
-
-          === PR Reviews ===
           $REVIEWS
 
-          Instructions:
-          1. Read each comment and understand what change is requested
-          2. Make the requested changes to the code
-          3. Commit: git commit -am 'Address PR review feedback'
-          4. Push: git push origin ${{ steps.pr.outputs.branch }}
-          5. Post a summary comment on the PR using:
-             gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
-             Replace SUMMARY with a brief markdown summary of what you fixed
+          === CI Status ===
+          $CI_STATUS
+
+          === Failed CI Logs (last 100 lines each) ===
+          $CI_LOGS
+
+          ## Process
+          1. Analyze review comments - understand requested changes
+          2. Analyze CI failures - understand what broke
+          3. Fix all issues
+          4. Run tests locally to verify fixes
+          5. Commit: git commit -am 'Fix review feedback and CI issues'
+          6. Push: git push origin ${{ steps.pr.outputs.branch }}
+          7. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
+
+          ## Rules
+          - Fix ALL issues, not just some
+          - If CI failed due to tests, make tests pass
+          - If CI failed due to lint/format, fix those too
           " 2>&1 | tee claude-output.txt
 
       - name: Debug test
