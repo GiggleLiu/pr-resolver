@@ -9,13 +9,14 @@ PR Automation system - comment `[action]` or `[fix]` on GitHub PRs to trigger Cl
 ## Commands
 
 ```bash
-make help              # Show all available targets
-make runner-setup      # Setup a runner for a repo
-make runner-status     # Check all runner statuses
-make runner-start      # Start all runners
-make runner-stop       # Stop all runners
-make runner-restart    # Restart all runners
-make runner-logs       # View runner logs
+make help                                # Show all available targets
+make add-repo REPO=owner/repo            # Full setup (workflow + runner + config)
+make setup REPO=owner/repo               # Setup runner only
+make status                              # Check all runner statuses
+make start                               # Start all runners
+make stop                                # Stop all runners
+make restart                             # Restart all runners
+make list                                # List configured repos
 ```
 
 ## Architecture
@@ -45,7 +46,8 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 | File | Purpose |
 |------|---------|
 | `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
-| `setup-runner.sh` | Runner setup script |
+| `add-repo.sh` | Full setup: workflow + runner + variable |
+| `setup-runner.sh` | Runner-only setup script |
 | `runner-config.toml` | Runner configuration |
 | `Makefile` | Runner management commands |
 
