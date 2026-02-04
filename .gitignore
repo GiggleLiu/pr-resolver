@@ -1,10 +1,11 @@
-# Build artifacts
-target/
-dist/
-*.egg-info/
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+dist/
+.venv/
+venv/
 
 # IDE
 .idea/
@@ -18,33 +19,25 @@ Thumbs.db
 
 # Logs
 *.log
-.claude/logs/
+.claude/logs/*
+!.claude/logs/.gitkeep
 
 # SQLite databases
 *.db
 *.db-journal
 
-# Environment
+# Environment and secrets
 .env
 .env.local
 *.local.toml
+.claude/webhook/config.toml
+!.claude/webhook/config.example.toml
 
-# Secrets (keep example files)
-config.toml
-!config.example.toml
-!*.example.toml
+# Cloudflare credentials (created by setup)
+.cloudflared/
 
-# Node modules (if any)
-node_modules/
-
-# Rust
-Cargo.lock
-
-# Python virtual environments
-.venv/
-venv/
-
-# Subprojects (have their own repos)
+# Local projects (not part of this repo)
+# Add any local project directories here if needed
 /dyad/
 /omeco/
 /omeinsum-rs/

@@ -7,7 +7,7 @@ port = 8787
 
 [github]
 # Your GitHub username (only comments from this user trigger jobs)
-username = "GiggleLiu"
+username = "your-github-username"
 
 # Webhook secret (generate with: openssl rand -hex 32)
 # Must match the secret configured in GitHub webhook settings
@@ -24,8 +24,26 @@ max_turns = 100
 progress_interval_minutes = 5
 
 [paths]
-# Root directory containing your repositories
-workspace = "/Users/jinguomini/rcode"
-
 # Directory for log files
-log_dir = "/Users/jinguomini/rcode/.claude/logs"
+log_dir = "~/.claude/logs"
+
+# Repositories to watch (list of paths or GitHub repo names)
+# Each entry maps a GitHub repo (owner/name) to a local path
+# If path is omitted, the repo will be cloned to a temp directory
+#
+# Format: { github = "owner/repo", path = "/local/path" }
+#
+# Examples:
+[[repos]]
+github = "owner/repo1"
+path = "~/projects/repo1"
+
+[[repos]]
+github = "owner/repo2"
+path = "~/projects/repo2"
+
+# Watch all repos in a directory (alternative to listing individually)
+# Scans for .git directories up to max_depth levels deep
+# [repos_dir]
+# path = "~/projects"
+# max_depth = 2

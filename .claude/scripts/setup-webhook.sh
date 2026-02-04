@@ -121,8 +121,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
     # Get GitHub username
     GH_USER=$(gh api user --jq '.login')
 
-    # Get workspace path
-    WORKSPACE="$(dirname "$CLAUDE_DIR")"
+    # Get log dir path
+    LOG_DIR="$CLAUDE_DIR/logs"
 
     cat > "$CONFIG_FILE" << EOF
 [server]
@@ -139,14 +139,28 @@ max_turns = 100
 progress_interval_minutes = 5
 
 [paths]
-workspace = "$WORKSPACE"
-log_dir = "$WORKSPACE/.claude/logs"
+log_dir = "$LOG_DIR"
+
+# Add repositories to watch below
+# Each repo needs a GitHub webhook configured pointing to your tunnel URL
+
+# Example:
+# [[repos]]
+# github = "owner/repo-name"
+# path = "~/projects/repo-name"
+
+# Or watch all repos in a directory:
+# [repos_dir]
+# path = "~/projects"
+# max_depth = 2
 EOF
 
     echo "✓ Config created at $CONFIG_FILE"
     echo ""
     echo "IMPORTANT: Your webhook secret is: $WEBHOOK_SECRET"
     echo "You'll need this when configuring the GitHub webhook."
+    echo ""
+    echo "NEXT: Edit $CONFIG_FILE to add repositories to watch."
 else
     echo "Config already exists at $CONFIG_FILE"
     WEBHOOK_SECRET=$(grep 'webhook_secret' "$CONFIG_FILE" | cut -d'"' -f2)

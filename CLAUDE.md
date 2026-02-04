@@ -2,113 +2,51 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Workspace Overview
+## Project Overview
 
-This is a Rust-based scientific computing workspace containing 7 interconnected projects for tensor networks, quantum computing, NP-hard optimization, and numerical algorithms. All projects are Rust libraries (Edition 2021) with optional Python bindings via PyO3/Maturin.
+PR Webhook Automation system - event-driven PR processing using GitHub webhooks and Claude Code.
 
-## Projects
-
-| Project | Purpose | Python Bindings |
-|---------|---------|-----------------|
-| `omeco` | Tensor network contraction order optimization | Yes |
-| `problem-reductions` | NP-hard problem definitions and reductions | No |
-| `yao-rs` | Quantum circuit description and tensor export | Yes |
-| `tropical-gemm` | High-performance tropical matrix multiplication (SIMD/CUDA) | Yes |
-| `omeinsum-rs` | Einstein summation for tensor networks | No |
-| `dyad` | Quantum chemistry (Unrestricted Hartree-Fock) | No |
-| `tn-mcp-rs` | MCP Server for tensor network operations | Python-native |
-
-## Common Commands
-
-All projects use Make for build automation with consistent targets:
+## Commands
 
 ```bash
-make build              # Build workspace (debug)
-make build-release      # Build in release mode
-make test               # Run all tests
-make clippy             # Lint (warnings = errors)
-make fmt                # Format code
-make fmt-check          # Check formatting
-make check-all          # fmt-check + clippy + test (run before commits)
-make doc                # Build and open rustdoc
-make build-book         # Build mdBook documentation
-make serve-book         # Serve mdBook at localhost:3000
+make help              # Show all available targets
+make setup             # Full setup (deps + webhook wizard)
+make services-start    # Start webhook + tunnel services
+make services-stop     # Stop all services
+make status            # Check webhook health and queue
+make logs              # Tail all logs
 ```
 
-For Python bindings (where applicable):
-```bash
-make python-dev         # Build and install locally
-make python-test        # Run pytest
-```
-
-## Dependency Graph
+## Architecture
 
 ```
-tn-mcp-rs (Python + Rust)
-    └── yao-rs
-        └── omeco
-
-omeinsum-rs
-    ├── omeco (contraction order)
-    └── tropical-gemm (optional, tropical algebras)
-
-dyad (standalone)
-problem-reductions (standalone)
+GitHub PR Comment
+       │
+       ▼
+GitHub Webhook ──► Cloudflare Tunnel ──► FastAPI Server ──► SQLite Queue ──► Claude Worker
+                                              │                                    │
+                                              └────────── Status Comments ◄────────┘
 ```
 
-## Project-Specific Guidelines
+## Key Files
 
-### omeco
-- **CRITICAL: Must stay aligned with [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl)**
-- Check Julia implementation at `~/.julia/dev/OMEinsumContractionOrders/` before changes
-- Tests marked "ALIGNED WITH JULIA" must not be modified without explicit instruction
-- Run comparative benchmarks to verify alignment
-- See `omeco/.claude/CLAUDE.md` for full guidelines
+- `.claude/webhook/server.py` - FastAPI webhook server + job worker
+- `.claude/webhook/config.toml` - Configuration (repos to watch, credentials)
+- `.claude/scripts/setup-webhook.sh` - One-time setup wizard
 
-### problem-reductions
-- Every reduction requires a closed-loop test (create → reduce → solve → extract → verify)
-- Use `#[reduction(...)]` macro for automatic inventory registration
-- Coverage must exceed 95%
-- Run `make export-graph` after adding reductions
-- See `problem-reductions/.claude/CLAUDE.md` and `.claude/rules/` for patterns
+## Configuration
 
-### tropical-gemm
-- Supports SIMD (AVX-512, AVX2, SSE4.1, NEON) and CUDA backends
-- Three semirings: MaxPlus, MinPlus, MaxMul
-- PyTorch integration available
+Repos to watch are configured in `.claude/webhook/config.toml`:
 
-### yao-rs
-- Port from [Yao.jl](https://github.com/QuantumBFS/Yao.jl)
-- Edition 2024
-
-## Code Conventions
-
-- No panics/unwraps in production code (tests only)
-- All public items must have doc comments with examples
-- Clippy warnings treated as errors (`-D warnings`)
-- Use `thiserror` for error types
-- Generic parameters preferred over concrete types
-- Serde for serialization (JSON support standard)
-
-## Testing
-
-- Rust: inline `#[test]` modules + `/tests` directories
-- Python: pytest via `maturin develop`
-- Benchmarks: criterion for Rust, comparative scripts with Julia implementations
-- Coverage tools: cargo-llvm-cov, tarpaulin
-
-## Automation
-
-### PR Webhook System (Recommended)
-
-Event-driven PR automation using GitHub webhooks. More reliable than polling.
-
-**Setup:**
-```bash
-.claude/scripts/setup-webhook.sh
+```toml
+[[repos]]
+github = "owner/repo"
+path = "~/projects/repo"
 ```
 
-**Commands (as PR comments):**
+Only configured repos accept webhook commands.
+
+## PR Commands
 
 | Command | Action |
 |---------|--------|
@@ -116,7 +54,7 @@ Event-driven PR automation using GitHub webhooks. More reliable than polling.
 | `[fix]` | Address review comments |
 | `[status]` | Check queue status |
 
-**Status comments (bot responses):**
+## Status Comments
 
 | Status | Meaning |
 |--------|---------|
@@ -126,16 +64,23 @@ Event-driven PR automation using GitHub webhooks. More reliable than polling.
 | `[failed]` | Error with details |
 | `[timeout]` | Exceeded time limit |
 
-**Architecture:** GitHub Webhook → Cloudflare Tunnel → FastAPI Server → SQLite Queue → Claude Worker
+## Development
 
-See `docs/plans/2026-02-04-pr-webhook-design.md` for details.
+The webhook server is Python (FastAPI). Key components:
 
-### Legacy: Polling-based Scripts
+1. **Webhook endpoint** (`/webhook`) - Receives GitHub events, validates signature, queues jobs
+2. **Job queue** (SQLite) - Persists jobs with deduplication by comment_id
+3. **Worker** (background thread) - Processes jobs sequentially, invokes Claude Code
+
+## Testing
 
 ```bash
-# One-shot (cron)
-.claude/scripts/pr-cron.sh /path/to/workspace
+# Start server manually for testing
+make webhook-start
 
-# Daemon mode
-.claude/scripts/pr-monitor.sh --workspace . --interval 1800
+# In another terminal, start tunnel
+make tunnel-start
+
+# Test the endpoint
+make test-webhook
 ```

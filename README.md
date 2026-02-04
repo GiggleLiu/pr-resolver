@@ -1,22 +1,6 @@
-# rcode
+# PR Webhook Automation
 
-Scientific computing workspace containing Rust libraries for tensor networks, quantum computing, and NP-hard optimization.
-
-## Projects
-
-| Project | Description |
-|---------|-------------|
-| [omeco](./omeco) | Tensor network contraction order optimization |
-| [problem-reductions](./problem-reductions) | NP-hard problem definitions and reductions |
-| [yao-rs](./yao-rs) | Quantum circuit description and tensor export |
-| [tropical-gemm](./tropical-gemm) | High-performance tropical matrix multiplication |
-| [omeinsum-rs](./omeinsum-rs) | Einstein summation for tensor networks |
-| [dyad](./dyad) | Quantum chemistry (Unrestricted Hartree-Fock) |
-| [tn-mcp-rs](./tn-mcp-rs) | MCP Server for tensor network operations |
-
-## PR Automation
-
-This workspace includes an automated PR processing system using GitHub webhooks.
+Automated PR processing system using GitHub webhooks and Claude Code. Trigger plan execution or review fixes by commenting on PRs.
 
 ### Quick Start
 
@@ -109,27 +93,54 @@ webhook_secret = "..."          # Generated during setup
 [worker]
 timeout_minutes = 30            # Max job runtime
 max_turns = 100                 # Max Claude API turns
+
+[paths]
+log_dir = "~/.claude/logs"
+
+# Repositories to watch - add each repo you want to automate
+[[repos]]
+github = "owner/repo1"          # GitHub repo (owner/name)
+path = "~/projects/repo1"       # Local path to the repo
+
+[[repos]]
+github = "owner/repo2"
+path = "~/projects/repo2"
+
+# Alternative: watch all repos in a directory
+# [repos_dir]
+# path = "~/projects"
+# max_depth = 2
 ```
+
+Only configured repositories will accept webhook commands. Unconfigured repos are ignored.
 
 ## Directory Structure
 
 ```
-rcode/
+pr-webhook/
 ├── .claude/
 │   ├── webhook/           # Webhook server
 │   │   ├── server.py      # FastAPI app + worker
-│   │   ├── config.toml    # Configuration
-│   │   └── jobs.db        # SQLite job queue
-│   ├── scripts/           # Automation scripts
+│   │   ├── config.toml    # Your configuration
+│   │   └── jobs.db        # SQLite job queue (auto-created)
+│   ├── scripts/           # Setup and utility scripts
 │   ├── skills/            # Claude Code skills
-│   ├── launchd/           # macOS service plists
+│   ├── launchd/           # macOS service plists (auto-created)
 │   └── logs/              # Log files
 ├── docs/plans/            # Design documents
-├── Makefile               # Workspace automation
+├── Makefile               # Automation commands
 ├── CLAUDE.md              # Claude Code guidance
-└── <projects>/            # Individual Rust projects
+└── README.md              # This file
 ```
+
+## How It Works
+
+1. You configure which repos to watch in `config.toml`
+2. For each repo, add a GitHub webhook pointing to your tunnel URL
+3. When you comment `[action]` or `[fix]` on a PR, GitHub sends a webhook
+4. The server queues the job and Claude Code executes it
+5. Status comments (`[executing]`, `[done]`, `[failed]`) are posted back to the PR
 
 ## License
 
-Each subproject has its own license. See individual project directories.
+MIT

@@ -21,7 +21,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
 
 try:
     import tomli
@@ -31,6 +31,11 @@ except ImportError:
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn
+
+
+def expand_path(path: str) -> Path:
+    """Expand ~ and environment variables in path."""
+    return Path(os.path.expandvars(os.path.expanduser(path)))
 
 # =============================================================================
 # Configuration
@@ -50,7 +55,82 @@ def load_config(config_path: Optional[str] = None) -> dict:
         )
 
     with open(config_path, "rb") as f:
-        return tomli.load(f)
+        cfg = tomli.load(f)
+
+    # Expand paths
+    if "paths" in cfg:
+        if "log_dir" in cfg["paths"]:
+            cfg["paths"]["log_dir"] = str(expand_path(cfg["paths"]["log_dir"]))
+
+    # Build repo mapping from config
+    cfg["_repo_map"] = build_repo_map(cfg)
+
+    return cfg
+
+
+def build_repo_map(cfg: dict) -> Dict[str, Path]:
+    """Build mapping from GitHub repo names to local paths."""
+    repo_map = {}
+
+    # Explicit repo list
+    for repo_cfg in cfg.get("repos", []):
+        github = repo_cfg.get("github")
+        path = repo_cfg.get("path")
+        if github and path:
+            repo_map[github] = expand_path(path)
+
+    # Directory scanning
+    repos_dir_cfg = cfg.get("repos_dir")
+    if repos_dir_cfg:
+        base_path = expand_path(repos_dir_cfg.get("path", "."))
+        max_depth = repos_dir_cfg.get("max_depth", 2)
+
+        if base_path.exists():
+            for git_dir in find_git_repos(base_path, max_depth):
+                repo_path = git_dir.parent
+                # Try to get GitHub remote
+                github_name = get_github_remote(repo_path)
+                if github_name:
+                    repo_map[github_name] = repo_path
+
+    return repo_map
+
+
+def find_git_repos(base_path: Path, max_depth: int) -> List[Path]:
+    """Find .git directories up to max_depth levels deep."""
+    repos = []
+    for depth in range(1, max_depth + 1):
+        pattern = "/".join(["*"] * depth) + "/.git"
+        repos.extend(base_path.glob(pattern))
+    return repos
+
+
+def get_github_remote(repo_path: Path) -> Optional[str]:
+    """Get GitHub repo name (owner/repo) from git remote."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=repo_path,
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            url = result.stdout.decode().strip()
+            # Parse GitHub URL formats:
+            # https://github.com/owner/repo.git
+            # git@github.com:owner/repo.git
+            match = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", url)
+            if match:
+                return match.group(1)
+    except:
+        pass
+    return None
+
+
+def get_repo_path(cfg: dict, github_repo: str) -> Optional[Path]:
+    """Get local path for a GitHub repo from config."""
+    repo_map = cfg.get("_repo_map", {})
+    return repo_map.get(github_repo)
 
 # =============================================================================
 # Logging
@@ -316,14 +396,20 @@ class Worker:
             self.queue.update_status(job_id, "done")
             return
 
-        # Find repo directory
-        workspace = Path(self.config["paths"]["workspace"])
-        repo_name = repo.split("/")[-1]
-        repo_dir = workspace / repo_name
+        # Find repo directory from config
+        repo_dir = get_repo_path(self.config, repo)
+
+        if repo_dir is None:
+            error_msg = f"Repository '{repo}' not configured. Add it to config.toml under [[repos]]."
+            self.logger.error(error_msg)
+            self.queue.update_status(job_id, "failed", error_msg)
+            post_comment(repo, pr_number, f"[failed] {error_msg}", self.logger)
+            return
 
         if not repo_dir.exists():
             # Try to clone
             try:
+                repo_dir.parent.mkdir(parents=True, exist_ok=True)
                 subprocess.run(
                     ["gh", "repo", "clone", repo, str(repo_dir)],
                     check=True,
@@ -437,7 +523,7 @@ Branch: {branch}
 Instructions:
 1. Read the plan file carefully
 2. Implement each step in order
-3. After each significant change, run tests (make test OR cargo test)
+3. After each significant change, run the project's test command (check Makefile, package.json, or project config)
 4. Commit changes with descriptive messages
 5. Push changes: git push origin {branch}
 
@@ -484,7 +570,7 @@ Instructions:
 1. Read each comment and understand what change is requested
 2. Make the requested changes to the code
 3. If a comment is a question, improve the code or add clarifying comments
-4. Run tests (make test OR cargo test)
+4. Run the project's test command (check Makefile, package.json, or project config)
 5. Commit: git commit -am 'Address PR review feedback'
 6. Push: git push origin {branch}
 
@@ -594,6 +680,12 @@ async def webhook(
     pr_number = payload.get("issue", {}).get("number")
 
     logger.info(f"Received [{command}] from {repo}#{pr_number}")
+
+    # Check if repo is configured
+    repo_path = get_repo_path(config, repo)
+    if repo_path is None:
+        logger.warning(f"Repository '{repo}' not configured, ignoring")
+        return {"status": "ignored", "reason": f"repo {repo} not configured"}
 
     # Handle [status] immediately
     if command == "status":
