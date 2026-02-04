@@ -108,12 +108,11 @@ echo ""
 echo "Step 4: Updating runner-config.toml..."
 CONFIG_FILE="$(dirname "$0")/runner-config.toml"
 if [ -f "$CONFIG_FILE" ]; then
-    if grep -q "repo = \"$REPO\"" "$CONFIG_FILE"; then
+    if grep -q "\"$REPO\"" "$CONFIG_FILE"; then
         warn "  Repo already in config, skipping"
     else
-        echo "" >> "$CONFIG_FILE"
-        echo "[[repos]]" >> "$CONFIG_FILE"
-        echo "repo = \"$REPO\"" >> "$CONFIG_FILE"
+        # Add repo before closing bracket - works on both macOS and Linux
+        awk -v repo="$REPO" '/^]$/ && !done {print "  \"" repo "\","; done=1} {print}' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
         info "  Added to config"
     fi
 else

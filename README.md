@@ -45,24 +45,19 @@ The workflow needs a GitHub Actions runner. Choose one:
 
 #### Self-hosted (recommended)
 
-**One-command setup** (if you cloned this repo):
 ```bash
-make add-repo REPO=your-username/your-repo ANTHROPIC_API_KEY="sk-ant-..."
-```
+# Clone this repo
+git clone https://github.com/GiggleLiu/pr-resolver.git
+cd pr-resolver
 
-This automatically:
-- Adds the workflow file to your repo
-- Sets up a self-hosted runner
-- Configures the `RUNNER_TYPE` variable
-- Adds the repo to your config
+# Add your repo to config (edit runner-config.toml, add to repos array)
 
-**Manual setup:**
-```bash
-curl -O https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/setup-runner.sh
-chmod +x setup-runner.sh
-./setup-runner.sh your-username/your-repo
+# Sync runners (sets up workflow, runner, and config)
+make update
+
+# Add API key
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/your-username-your-repo/.env
 ```
-Then set repository variable `RUNNER_TYPE=self-hosted` (Settings → Variables → Actions).
 
 #### GitHub-hosted
 
@@ -113,36 +108,23 @@ Claude will ask clarifying questions, explore approaches, and write a detailed p
 
 ## Managing Multiple Repos
 
-For teams managing many repos, use the runner management tools:
+Edit `runner-config.toml` and run `make update`:
+
+```toml
+# runner-config.toml
+[runner]
+base_dir = "~/actions-runners"
+repos = [
+  "your-org/repo1",
+  "your-org/repo2",
+]
+```
 
 ```bash
-# Clone this repo for the tools
-git clone https://github.com/GiggleLiu/pr-resolver.git
-cd pr-resolver
-
-# Create config from template
-cp runner-config.example.toml runner-config.toml
-vi runner-config.toml
-
-# Setup all runners at once
-make setup-all ANTHROPIC_API_KEY="sk-ant-..."
-
-# Manage runners
+make update    # Sync: add missing runners, remove unlisted
 make status    # Check all
 make restart   # Restart all
 make stop      # Stop all
-```
-
-Configuration (`runner-config.toml`):
-```toml
-[runner]
-base_dir = "~/actions-runners"
-
-[[repos]]
-repo = "your-org/repo1"
-
-[[repos]]
-repo = "your-org/repo2"
 ```
 
 ## How It Works

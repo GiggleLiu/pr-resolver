@@ -9,9 +9,7 @@ PR Automation system - comment `[action]` or `[fix]` on GitHub PRs to trigger Cl
 ## Commands
 
 ```bash
-make help                                # Show all available targets
-make add-repo REPO=owner/repo            # Full setup (workflow + runner + config)
-make setup REPO=owner/repo               # Setup runner only
+make update                              # Sync runners with config (add/remove)
 make status                              # Check all runner statuses
 make start                               # Start all runners
 make stop                                # Stop all runners
@@ -46,10 +44,10 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 | File | Purpose |
 |------|---------|
 | `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
-| `add-repo.sh` | Full setup: workflow + runner + variable |
-| `setup-runner.sh` | Runner-only setup script |
-| `runner-config.toml` | Runner configuration |
+| `runner-config.toml` | Source of truth for managed repos |
 | `Makefile` | Runner management commands |
+| `add-repo.sh` | Setup script (called by make update) |
+| `setup-runner.sh` | Runner setup (called by add-repo.sh) |
 
 ## PR Commands
 
@@ -70,40 +68,33 @@ After execution, Claude posts a summary comment describing what was done.
 
 ## Runner Configuration
 
-### Self-hosted Runner (Recommended)
+### Setup (Self-hosted)
 
 ```bash
-# One-time setup
-./setup-runner.sh owner/repo
+# 1. Edit runner-config.toml, add repo to the repos array
 
-# API key configuration
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/repo-name/.env
+# 2. Sync runners
+make update
+
+# 3. Add API key (once per runner)
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/owner-repo/.env
 ```
 
-Then set repository variable `RUNNER_TYPE=self-hosted` (Settings → Variables → Actions).
+### Remove a Runner
 
-### GitHub-hosted Runner
+```bash
+# 1. Remove from runner-config.toml
+# 2. Sync
+make update
+```
+
+### GitHub-hosted Runner (Alternative)
 
 Just add `ANTHROPIC_API_KEY` to repository secrets — no other setup needed.
 
-### How Runner Selection Works
-
 The workflow uses `runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}`:
-- If `RUNNER_TYPE` variable is set to `self-hosted` → uses your self-hosted runner
+- If `RUNNER_TYPE=self-hosted` → uses your self-hosted runner
 - If not set → defaults to GitHub-hosted `ubuntu-latest`
-
-API key is loaded from secrets first, then falls back to runner's `.env` file.
-
-## Multi-Repo Management
-
-For managing runners across multiple repositories:
-
-```bash
-# Configure repos in runner-config.toml
-make setup-all ANTHROPIC_API_KEY="sk-ant-..."
-make status
-make restart
-```
 
 ## Development
 
