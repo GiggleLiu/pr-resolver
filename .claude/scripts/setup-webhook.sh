@@ -198,9 +198,9 @@ cat > "$LAUNCHD_DIR/com.claude.webhook.plist" << EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$WORKSPACE/.claude/logs/webhook-stdout.log</string>
+    <string>$LOG_DIR/webhook-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>$WORKSPACE/.claude/logs/webhook-stderr.log</string>
+    <string>$LOG_DIR/webhook-stderr.log</string>
 </dict>
 </plist>
 EOF
@@ -225,9 +225,9 @@ cat > "$LAUNCHD_DIR/com.claude.tunnel.plist" << EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$WORKSPACE/.claude/logs/tunnel-stdout.log</string>
+    <string>$LOG_DIR/tunnel-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>$WORKSPACE/.claude/logs/tunnel-stderr.log</string>
+    <string>$LOG_DIR/tunnel-stderr.log</string>
 </dict>
 </plist>
 EOF
