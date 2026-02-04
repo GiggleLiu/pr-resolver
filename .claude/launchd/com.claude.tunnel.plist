@@ -16,8 +16,8 @@
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/jinguomini/rcode/.claude/logs/tunnel-stdout.log</string>
+    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/tunnel-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/jinguomini/rcode/.claude/logs/tunnel-stderr.log</string>
+    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/tunnel-stderr.log</string>
 </dict>
 </plist>

@@ -7,24 +7,24 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Users/jinguomini/rcode/.claude/webhook/server.py</string>
+        <string>/Users/jinguomini/server/pr-resolver/.claude/webhook/server.py</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
         <key>WEBHOOK_CONFIG</key>
-        <string>/Users/jinguomini/rcode/.claude/webhook/config.toml</string>
+        <string>/Users/jinguomini/server/pr-resolver/.claude/webhook/config.toml</string>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/Users/jinguomini/.local/bin</string>
     </dict>
     <key>WorkingDirectory</key>
-    <string>/Users/jinguomini/rcode/.claude/webhook</string>
+    <string>/Users/jinguomini/server/pr-resolver/.claude/webhook</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/jinguomini/rcode/.claude/logs/webhook-stdout.log</string>
+    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/webhook-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/jinguomini/rcode/.claude/logs/webhook-stderr.log</string>
+    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/webhook-stderr.log</string>
 </dict>
 </plist>

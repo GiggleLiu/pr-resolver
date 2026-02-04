@@ -35,13 +35,3 @@ Thumbs.db
 
 # Cloudflare credentials (created by setup)
 .cloudflared/
-
-# Local projects (not part of this repo)
-# Add any local project directories here if needed
-/dyad/
-/omeco/
-/omeinsum-rs/
-/problem-reductions/
-/tn-mcp-rs/
-/tropical-gemm/
-/yao-rs/
