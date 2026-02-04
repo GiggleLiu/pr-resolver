@@ -15,6 +15,22 @@ make services-start
 make status
 ```
 
+### Quick Tunnel Mode (China / SSL issues)
+
+If you're in an environment where Cloudflare's Universal SSL isn't available (e.g., China), use the Quick Tunnel script:
+
+```bash
+# Start Quick Tunnel with auto-webhook-update
+.claude/scripts/start-tunnel.sh
+
+# This will:
+# 1. Start a new Quick Tunnel (URL changes each restart)
+# 2. Automatically update all GitHub webhook URLs
+# 3. Print the new tunnel URL
+```
+
+Note: Quick Tunnel URLs change on restart. The script handles this by automatically updating all configured webhook URLs.
+
 ### PR Commands
 
 Comment on any PR to trigger automation:
