@@ -71,8 +71,9 @@ jobs:
         if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Install superpowers plugin
-        run: claude plugins add anthropics/claude-code-superpowers --yes 2>/dev/null || true
+      - name: Install superpowers plugin (GitHub-hosted only)
+        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
+        run: npm install -g @anthropic-ai/claude-code-superpowers
 
       - name: Find plan file
         id: plan
