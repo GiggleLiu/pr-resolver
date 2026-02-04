@@ -1,8 +1,12 @@
 # PR Automation
 
-Github action runner that **use claude superpower to implement your plans.** Write a plan, open a PR, comment `[action]` — Claude executes it.
+GitHub Action runner that **uses Claude superpowers to implement your plans.** Write a plan, open a PR, comment `[action]` — Claude executes it.
 
-This is plan-driven development: you think, Claude codes.
+**Purposes**
+
+- Share Claude Max account to resolve pull requests across multiple repos.
+- Enforce superpower subagent-driven development to improve code quality.
+- Avoid annoying permission prompts when executing plans in Claude Code.
 
 ## The Workflow
 
