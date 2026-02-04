@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      statuses: write
 
     steps:
       - name: Get PR details
@@ -31,6 +32,7 @@ jobs:
               pull_number: context.issue.number
             });
             core.setOutput('branch', pr.data.head.ref);
+            core.setOutput('sha', pr.data.head.sha);
 
             const body = context.payload.comment.body;
             let command = 'unknown';
@@ -38,6 +40,20 @@ jobs:
             else if (body.startsWith('[fix]')) command = 'fix';
             else if (body.startsWith('[debug]')) command = 'debug';
             core.setOutput('command', command);
+
+      - name: Set pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.sha }}',
+              state: 'pending',
+              context: 'PR Automation / ${{ steps.pr.outputs.command }}',
+              description: 'Running...',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
 
       - name: Checkout PR branch
         uses: actions/checkout@v4
@@ -118,3 +134,33 @@ jobs:
           name: claude-output
           path: claude-output.txt
           retention-days: 7
+
+      - name: Set success status
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.sha }}',
+              state: 'success',
+              context: 'PR Automation / ${{ steps.pr.outputs.command }}',
+              description: 'Completed successfully',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
+
+      - name: Set failure status
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.sha }}',
+              state: 'failure',
+              context: 'PR Automation / ${{ steps.pr.outputs.command }}',
+              description: 'Failed - check logs',
+              target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            });
