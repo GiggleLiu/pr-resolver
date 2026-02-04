@@ -1,6 +1,19 @@
 # PR Webhook Automation
 
-Automate PR workflows with Claude Code. Comment `[action]` or `[fix]` on any PR to trigger plan execution or review fixes.
+Automate PR workflows with Claude Code using a plan-driven development approach.
+
+## Workflow
+
+```
+1. Create a PR with a plan file (e.g., docs/plans/feature-design.md)
+2. Comment [action] on the PR
+3. Claude reads the plan, implements it, and pushes commits
+4. Review the changes, leave feedback
+5. Comment [fix] to have Claude address review comments
+6. Repeat until ready to merge
+```
+
+This enables a "write the plan, not the code" workflow where you describe **what** to build and Claude handles the implementation.
 
 ## Features
 
