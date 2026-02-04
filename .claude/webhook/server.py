@@ -510,7 +510,7 @@ class Worker:
 
     def _build_action_prompt(self, repo_dir: Path, repo: str, pr_number: int, branch: str) -> str:
         """Build prompt for [action] command."""
-        # Find plan file
+        # Find plan file - check specific locations first
         plan_files = ["PLAN.md", "plan.md", ".claude/plan.md", "docs/plan.md"]
         plan_path = None
         for pf in plan_files:
@@ -518,12 +518,20 @@ class Worker:
                 plan_path = repo_dir / pf
                 break
 
+        # Also check docs/plans/*.md (use most recent if multiple)
+        if not plan_path:
+            plans_dir = repo_dir / "docs" / "plans"
+            if plans_dir.exists():
+                plan_files_glob = sorted(plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if plan_files_glob:
+                    plan_path = plan_files_glob[0]
+
         if not plan_path:
             return f"""
 No plan file found in {repo_dir}.
 
 Post a comment to the PR explaining that no plan file was found:
-gh pr comment {pr_number} --repo {repo} --body '[waiting] No plan file found. Please create one of: PLAN.md, plan.md, .claude/plan.md, or docs/plan.md'
+gh pr comment {pr_number} --repo {repo} --body '[waiting] No plan file found. Please create one of: PLAN.md, plan.md, .claude/plan.md, docs/plan.md, or docs/plans/*.md'
 """
 
         return f"""

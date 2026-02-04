@@ -69,7 +69,7 @@ Only configured repos accept webhook commands. Unconfigured repos are silently i
 
 | Command | Action |
 |---------|--------|
-| `[action]` | Execute plan file (PLAN.md, plan.md, .claude/plan.md, or docs/plan.md) |
+| `[action]` | Execute plan file (PLAN.md, plan.md, .claude/plan.md, docs/plan.md, or docs/plans/*.md) |
 | `[fix]` | Fetch review comments and address them |
 | `[status]` | Reply with queue length (immediate, no job created) |
 | `[debug]` | Test full pipeline round-trip (Claude posts [pass] or [fail]) |
