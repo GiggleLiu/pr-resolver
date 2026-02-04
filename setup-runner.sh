@@ -98,6 +98,7 @@ if [ ! -f "./config.sh" ]; then
   if ! curl -sL "$RUNNER_URL" | tar xz; then
     error "Failed to download runner from $RUNNER_URL"
   fi
+  # Don't keep the archive - saves ~75MB per runner
 fi
 
 # Get registration token (requires admin access)

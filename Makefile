@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep '^\s*repo\s*=' $(CONFIG_FILE) 2>/dev/null | cut -d'"' -f2)
 
-.PHONY: help add-repo setup setup-all status start stop restart remove list migrate
+.PHONY: help add-repo setup setup-all status start stop restart remove list migrate clean
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -25,6 +25,7 @@ help:
 	@echo "  make restart                                 # Restart all runners"
 	@echo "  make remove REPO=owner/repo                  # Remove a runner"
 	@echo "  make list                                    # List configured repos"
+	@echo "  make clean                                   # Clean caches (saves ~3GB)"
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
 	@echo "Runners: $(BASE_DIR)"
@@ -133,3 +134,12 @@ migrate:
 		fi \
 	done
 	@echo "Done. Run 'make status' to verify."
+
+clean:
+	@echo "Cleaning runner caches..."
+	@echo "Before: $$(du -sh $(BASE_DIR) | cut -f1)"
+	@rm -f $(BASE_DIR)/*/*.tar.gz
+	@rm -rf $(BASE_DIR)/*/_work/_update
+	@echo "After:  $$(du -sh $(BASE_DIR) | cut -f1)"
+	@echo ""
+	@echo "Note: _work/_tool/ kept (cached tools). To remove: rm -rf $(BASE_DIR)/*/_work/_tool"
