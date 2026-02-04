@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$(dirname "$SCRIPT_DIR")"
 WEBHOOK_DIR="$CLAUDE_DIR/webhook"
 LAUNCHD_DIR="$CLAUDE_DIR/launchd"
+LOG_DIR="$CLAUDE_DIR/logs"
 
 echo "========================================"
 echo "PR Webhook Setup"
@@ -125,9 +126,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
 
     # Get GitHub username
     GH_USER=$(gh api user --jq '.login')
-
-    # Get log dir path
-    LOG_DIR="$CLAUDE_DIR/logs"
 
     cat > "$CONFIG_FILE" << EOF
 [server]
