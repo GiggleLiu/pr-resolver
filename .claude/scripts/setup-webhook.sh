@@ -63,6 +63,11 @@ echo ""
 echo "Checking Cloudflare authentication..."
 if ! cloudflared tunnel list &>/dev/null 2>&1; then
     echo "Please log in to Cloudflare (this will open a browser)..."
+    echo ""
+    echo "NOTE: When asked to select a zone, pick ANY zone you have access to."
+    echo "      This is just for authentication - your tunnel will use a free"
+    echo "      *.cfargotunnel.com URL regardless of which zone you select."
+    echo ""
     cloudflared tunnel login
 fi
 echo "✓ Cloudflare authenticated"
@@ -235,6 +240,78 @@ EOF
 echo "✓ Launchd plist files created"
 echo ""
 
+# Create logs directory
+mkdir -p "$LOG_DIR"
+echo "✓ Logs directory created at $LOG_DIR"
+echo ""
+
+# Ask about repos to watch
+echo "========================================"
+echo "Configure Repositories"
+echo "========================================"
+echo ""
+echo "Where are your Git repositories located?"
+echo "  1) Enter a directory path to scan (recommended)"
+echo "  2) Skip - I'll configure repos manually later"
+echo ""
+read -p "Choice [1/2]: " REPO_CHOICE
+
+if [ "$REPO_CHOICE" = "1" ]; then
+    read -p "Enter directory path (e.g., ~/projects): " REPOS_PATH
+    REPOS_PATH=$(eval echo "$REPOS_PATH")  # Expand ~
+
+    if [ -d "$REPOS_PATH" ]; then
+        # Update config with repos_dir
+        sed -i.bak '/^# Example:/,/^# max_depth/d' "$CONFIG_FILE"
+        cat >> "$CONFIG_FILE" << EOF
+
+[repos_dir]
+path = "$REPOS_PATH"
+max_depth = 2
+EOF
+        echo "✓ Config updated to watch: $REPOS_PATH"
+        echo ""
+
+        # Offer to create webhooks
+        echo "Would you like to automatically create GitHub webhooks for all repos in $REPOS_PATH?"
+        read -p "Create webhooks? [y/N]: " CREATE_HOOKS
+
+        if [ "$CREATE_HOOKS" = "y" ] || [ "$CREATE_HOOKS" = "Y" ]; then
+            echo ""
+            echo "Creating webhooks..."
+            for dir in "$REPOS_PATH"/*/; do
+                if [ -d "$dir/.git" ]; then
+                    cd "$dir"
+                    remote=$(git remote get-url origin 2>/dev/null || echo "")
+                    if [[ "$remote" == *github.com* ]]; then
+                        repo_name=$(echo "$remote" | sed -E 's|.*github.com[:/]||' | sed 's|\.git$||')
+                        echo "  Creating webhook for $repo_name..."
+                        gh api "repos/$repo_name/hooks" \
+                            --method POST \
+                            --input - <<HOOKEOF 2>/dev/null && echo "    ✓ Created" || echo "    ✗ Failed (may already exist)"
+{
+  "config": {
+    "url": "$TUNNEL_URL/webhook",
+    "content_type": "json",
+    "secret": "$WEBHOOK_SECRET"
+  },
+  "events": ["issue_comment"],
+  "active": true
+}
+HOOKEOF
+                    fi
+                fi
+            done
+            echo ""
+            echo "✓ Webhook creation complete"
+        fi
+    else
+        echo "Directory not found: $REPOS_PATH"
+        echo "You can configure repos later in: $CONFIG_FILE"
+    fi
+fi
+echo ""
+
 # Print next steps
 echo "========================================"
 echo "Setup Complete!"
@@ -242,25 +319,23 @@ echo "========================================"
 echo ""
 echo "NEXT STEPS:"
 echo ""
-echo "1. Configure GitHub webhook for each repo:"
-echo "   - Go to: https://github.com/<owner>/<repo>/settings/hooks/new"
-echo "   - Payload URL: $TUNNEL_URL/webhook"
-echo "   - Content type: application/json"
-echo "   - Secret: $WEBHOOK_SECRET"
-echo "   - Events: Select 'Issue comments' only"
+echo "1. Start the services:"
+echo "   make services-start"
 echo ""
-echo "2. Start the services:"
-echo "   # Install launchd services"
-echo "   cp $LAUNCHD_DIR/*.plist ~/Library/LaunchAgents/"
-echo "   launchctl load ~/Library/LaunchAgents/com.claude.tunnel.plist"
-echo "   launchctl load ~/Library/LaunchAgents/com.claude.webhook.plist"
-echo ""
-echo "3. Or run manually for testing:"
+echo "   Or run manually for testing:"
 echo "   # Terminal 1: Start tunnel"
 echo "   cloudflared tunnel run $TUNNEL_NAME"
 echo ""
 echo "   # Terminal 2: Start webhook server"
 echo "   cd $WEBHOOK_DIR && python3 server.py"
 echo ""
-echo "4. Test by commenting '[status]' on a PR"
+echo "2. Test by commenting '[status]' on a PR"
+echo ""
+echo "3. If you need to add webhooks to more repos:"
+echo "   gh api repos/OWNER/REPO/hooks --method POST --input - <<EOF"
+echo "   {"
+echo "     \"config\": {\"url\": \"$TUNNEL_URL/webhook\", \"content_type\": \"json\", \"secret\": \"$WEBHOOK_SECRET\"},"
+echo "     \"events\": [\"issue_comment\"], \"active\": true"
+echo "   }"
+echo "   EOF"
 echo ""

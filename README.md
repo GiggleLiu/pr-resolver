@@ -141,6 +141,43 @@ pr-webhook/
 4. The server queues the job and Claude Code executes it
 5. Status comments (`[executing]`, `[done]`, `[failed]`) are posted back to the PR
 
+## Setup Notes
+
+### Cloudflare Login
+
+When `cloudflared tunnel login` asks you to select a zone, **pick any zone** you have access to. This is just for authentication - your tunnel will use a free `*.cfargotunnel.com` URL regardless of which zone you select.
+
+### Adding Webhooks via CLI
+
+Instead of configuring webhooks through GitHub's web UI, you can use `gh`:
+
+```bash
+# Get your webhook URL and secret from config
+WEBHOOK_URL="https://<tunnel-id>.cfargotunnel.com/webhook"
+SECRET=$(grep webhook_secret .claude/webhook/config.toml | cut -d'"' -f2)
+
+# Create webhook for a repo
+gh api repos/OWNER/REPO/hooks --method POST --input - <<EOF
+{
+  "config": {"url": "$WEBHOOK_URL", "content_type": "json", "secret": "$SECRET"},
+  "events": ["issue_comment"],
+  "active": true
+}
+EOF
+```
+
+### Adding Webhooks for All Repos in a Directory
+
+```bash
+for dir in ~/projects/*/; do
+  cd "$dir"
+  repo=$(git remote get-url origin 2>/dev/null | sed -E 's|.*github.com[:/]||;s|\.git$||')
+  [ -n "$repo" ] && gh api "repos/$repo/hooks" --method POST --input - <<EOF
+{"config":{"url":"$WEBHOOK_URL","content_type":"json","secret":"$SECRET"},"events":["issue_comment"],"active":true}
+EOF
+done
+```
+
 ## License
 
 MIT
