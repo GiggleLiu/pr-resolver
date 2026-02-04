@@ -1,0 +1,20 @@
+# PR Monitor Configuration
+# Copy to ~/.claude/pr-monitor.conf or specify with --config
+
+# Workspace directory to scan for repos
+# WORKSPACE_DIR="/path/to/workspace"
+
+# Scan interval in seconds (default: 1800 = 30 minutes)
+# INTERVAL=1800
+
+# Claude Code flags (customize as needed)
+# CLAUDE_FLAGS="--dangerously-skip-permissions --max-turns 100"
+
+# Plan file names to search for (space-separated)
+# PLAN_FILES="PLAN.md plan.md .claude/plan.md docs/plan.md"
+
+# GitHub username (defaults to @me)
+# GH_USER="@me"
+
+# Log retention days
+# LOG_RETENTION_DAYS=7

@@ -1,0 +1,54 @@
+# Build artifacts
+target/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.claude/logs/
+
+# SQLite databases
+*.db
+*.db-journal
+
+# Environment
+.env
+.env.local
+*.local.toml
+
+# Secrets (keep example files)
+config.toml
+!config.example.toml
+!*.example.toml
+
+# Node modules (if any)
+node_modules/
+
+# Rust
+Cargo.lock
+
+# Python virtual environments
+.venv/
+venv/
+
+# Subprojects (have their own repos)
+/dyad/
+/omeco/
+/omeinsum-rs/
+/problem-reductions/
+/tn-mcp-rs/
+/tropical-gemm/
+/yao-rs/
