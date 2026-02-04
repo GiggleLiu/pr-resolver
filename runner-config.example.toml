@@ -4,10 +4,7 @@
 [runner]
 base_dir = "~/actions-runners"
 runner_version = "2.321.0"
-
-# Add repos to manage (one runner per repo)
-[[repos]]
-repo = "your-org/repo1"
-
-[[repos]]
-repo = "your-org/repo2"
+repos = [
+  "your-org/repo1",
+  "your-org/repo2",
+]
