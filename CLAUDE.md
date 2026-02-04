@@ -4,20 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PR Webhook Automation system - event-driven PR processing using GitHub webhooks and Claude Code. Comment `[action]` or `[fix]` on PRs to trigger automated plan execution or review fixes.
+PR Automation system - comment `[action]` or `[fix]` on GitHub PRs to trigger Claude Code to execute plans or address review feedback. Uses GitHub Actions with self-hosted runners.
 
 ## Commands
 
 ```bash
 make help              # Show all available targets
-make setup             # Full setup (deps + webhook wizard)
-make services-start    # Start webhook + tunnel services (launchd)
-make services-stop     # Stop all services
-make services-status   # Check if services are running
-make status            # Check webhook health and queue length
-make logs              # Tail all logs
-make webhook-start     # Start server manually (foreground)
-make tunnel-start      # Start tunnel manually (foreground)
+make runner-setup      # Setup a runner for a repo
+make runner-status     # Check all runner statuses
+make runner-start      # Start all runners
+make runner-stop       # Stop all runners
+make runner-restart    # Restart all runners
+make runner-logs       # View runner logs
 ```
 
 ## Architecture
@@ -26,44 +24,30 @@ make tunnel-start      # Start tunnel manually (foreground)
 GitHub PR Comment
        │
        ▼
-GitHub Webhook ──► Cloudflare Tunnel ──► FastAPI Server ──► SQLite Queue ──► Claude Worker
-       │                (8787)                 │                                    │
-       │                                       │                                    │
-       └─────────────────────────────── Status Comments ◄───────────────────────────┘
+GitHub Actions ──► Self-hosted Runner ──► Claude CLI
+       │                                      │
+       │                                      ▼
+       │                              Read plan, implement,
+       │                              commit, push
+       │                                      │
+       └──── Status Check (✓/✗) ◄─────────────┘
 ```
 
 **Flow:**
-1. User comments `[action]` on PR → GitHub sends webhook
-2. Server validates signature, checks repo is configured, queues job
-3. Worker picks job, posts `[executing]`, invokes `claude` subprocess
-4. On completion, posts `[done]` or `[failed]` with details
+1. User comments `[action]` on PR → GitHub triggers workflow
+2. Workflow checks out PR branch, finds plan file
+3. Runs `claude --dangerously-skip-permissions` to execute plan
+4. Claude commits, pushes, and posts summary comment
+5. Workflow reports success/failure via commit status API
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `.claude/webhook/server.py` | FastAPI server + SQLite queue + worker thread |
-| `.claude/webhook/config.toml` | Repos to watch, credentials, timeouts |
-| `.claude/scripts/setup-webhook.sh` | One-time setup wizard |
-| `.claude/launchd/*.plist` | macOS service definitions |
-
-## Configuration
-
-Repos are configured in `.claude/webhook/config.toml`:
-
-```toml
-# Explicit list
-[[repos]]
-github = "owner/repo"
-path = "~/projects/repo"
-
-# Or scan a directory
-[repos_dir]
-path = "~/projects"
-max_depth = 2
-```
-
-Only configured repos accept webhook commands. Unconfigured repos are silently ignored.
+| `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
+| `setup-runner.sh` | Runner setup script |
+| `runner-config.toml` | Runner configuration |
+| `Makefile` | Runner management commands |
 
 ## PR Commands
 
@@ -71,116 +55,60 @@ Only configured repos accept webhook commands. Unconfigured repos are silently i
 |---------|--------|
 | `[action]` | Execute plan file (PLAN.md, plan.md, .claude/plan.md, docs/plan.md, or docs/plans/*.md) |
 | `[fix]` | Fetch review comments and address them |
-| `[status]` | Reply with queue length (immediate, no job created) |
-| `[debug]` | Test full pipeline round-trip (Claude posts [pass] or [fail]) |
+| `[debug]` | Test workflow pipeline (creates test comment) |
 
-## Status Comments
+## Status Reporting
 
-| Status | Meaning |
-|--------|---------|
-| `[queued]` | Job added to queue with position |
-| `[done]` | Plan completed successfully |
-| `[fixed]` | Review comments addressed |
-| `[failed]` | Error with details |
-| `[timeout]` | Exceeded time limit (default 30 min) |
-| `[waiting]` | No plan file found |
+Status is shown directly in the PR's status checks (not comments):
+- **Pending**: Workflow is running
+- **Success**: Plan executed successfully
+- **Failure**: Error occurred (check Actions log)
 
-Note: `[executing]`/`[fixing]` comments were removed to reduce PR noise. Only `[queued]` is posted when a job starts.
+After execution, Claude posts a summary comment describing what was done.
 
-## Adding Webhooks via CLI
+## Runner Configuration
+
+### Self-hosted Runner (Recommended)
 
 ```bash
-# Get values from config
-WEBHOOK_URL="https://<tunnel-id>.cfargotunnel.com/webhook"
-SECRET=$(grep webhook_secret .claude/webhook/config.toml | cut -d'"' -f2)
+# One-time setup
+./setup-runner.sh owner/repo
 
-# Create webhook
-gh api repos/OWNER/REPO/hooks --method POST --input - <<EOF
-{"config":{"url":"$WEBHOOK_URL","content_type":"json","secret":"$SECRET"},"events":["issue_comment"],"active":true}
-EOF
+# API key configuration
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/repo-name/.env
+```
+
+Then set repository variable `RUNNER_TYPE=self-hosted` (Settings → Variables → Actions).
+
+### GitHub-hosted Runner
+
+Just add `ANTHROPIC_API_KEY` to repository secrets — no other setup needed.
+
+### How Runner Selection Works
+
+The workflow uses `runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}`:
+- If `RUNNER_TYPE` variable is set to `self-hosted` → uses your self-hosted runner
+- If not set → defaults to GitHub-hosted `ubuntu-latest`
+
+API key is loaded from secrets first, then falls back to runner's `.env` file.
+
+## Multi-Repo Management
+
+For managing runners across multiple repositories:
+
+```bash
+# Configure repos in runner-config.toml
+make setup-all ANTHROPIC_API_KEY="sk-ant-..."
+make status
+make restart
 ```
 
 ## Development
 
-The server is a single Python file with three components:
+The workflow (`pr-automation.yml`) has three main steps:
 
-1. **Webhook endpoint** (`POST /webhook`)
-   - Validates HMAC-SHA256 signature
-   - Filters: only `issue_comment` events, only PRs, only configured user, only configured repos
-   - Queues job or handles `[status]` immediately
+1. **Get PR details**: Extracts branch name, SHA, and command type
+2. **Execute plan / Fix comments**: Runs Claude with appropriate prompt
+3. **Set status**: Reports success/failure via commit status API
 
-2. **Job queue** (SQLite `jobs` table)
-   - Columns: repo, pr_number, branch, command, comment_id (unique), status, error, timestamps
-   - Deduplicates by comment_id (GitHub may retry webhooks)
-
-3. **Worker** (background thread)
-   - Polls every 5 seconds for pending jobs
-   - Processes sequentially (no parallelism)
-   - Spawns `claude` with 30-minute timeout
-
-## Testing
-
-```bash
-# Terminal 1: Start tunnel
-make tunnel-start
-
-# Terminal 2: Start server
-make webhook-start
-
-# Terminal 3: Test endpoint
-curl http://localhost:8787/health
-make test-webhook
-```
-
-## GitHub Actions (Recommended)
-
-Simpler alternative to webhook server - no tunnel needed.
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
-
-### How It Works
-
-1. User comments `[action]` on PR → GitHub triggers workflow
-2. Workflow checks out PR branch, finds plan file
-3. Runs `claude --dangerously-skip-permissions` to execute plan
-4. Reports status via commit status API (shows in PR checks)
-
-### Runner Configuration
-
-**Self-hosted runner** (recommended):
-```bash
-# API key in runner environment
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runner/.env
-cd ~/actions-runner && ./svc.sh stop && ./svc.sh start
-```
-
-**GitHub-hosted runner**:
-- Set `ANTHROPIC_API_KEY` in repository secrets
-- Change `runs-on: self-hosted` to `runs-on: ubuntu-latest`
-
-### Workflow Supports Both
-
-The workflow automatically uses:
-1. Repository secret `ANTHROPIC_API_KEY` if set
-2. Otherwise, runner's environment variable
-
-## Quick Tunnel Mode (China / SSL issues)
-
-If Cloudflare's Universal SSL isn't available (common in China), use Quick Tunnel:
-
-```bash
-# Start Quick Tunnel with auto-webhook-update
-.claude/scripts/start-tunnel.sh
-```
-
-This script:
-1. Temporarily moves named tunnel credentials aside (they interfere with Quick Tunnel)
-2. Starts a fresh Quick Tunnel
-3. Automatically updates all GitHub webhook URLs to the new tunnel URL
-4. Prints the new URL and PID
-
-Quick Tunnel URLs change on each restart, so run this script whenever you restart the tunnel.
+Claude is invoked with `--dangerously-skip-permissions` and `--max-turns 100` to allow autonomous execution within the sandboxed runner environment.

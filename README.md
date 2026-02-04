@@ -47,7 +47,7 @@ The workflow needs a GitHub Actions runner. Choose one:
 
 ```bash
 # Get setup script
-curl -O https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/.claude/setup-runner.sh
+curl -O https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/setup-runner.sh
 chmod +x setup-runner.sh
 
 # Run it (get token from: Settings → Actions → Runners → New)
@@ -55,13 +55,15 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ./setup-runner.sh your-username/your-repo
 ```
 
+Then set repository variable (Settings → Secrets and variables → Actions → Variables):
+- Name: `RUNNER_TYPE`
+- Value: `self-hosted`
+
 #### GitHub-hosted
 
-1. Edit `.github/workflows/pr-automation.yml`:
-   ```yaml
-   runs-on: ubuntu-latest  # was: self-hosted
-   ```
-2. Add `ANTHROPIC_API_KEY` to repo secrets (Settings → Secrets → Actions)
+Just add `ANTHROPIC_API_KEY` to repo secrets (Settings → Secrets → Actions).
+
+No other setup needed — the workflow defaults to GitHub-hosted runners.
 
 ### 3. Try it
 
@@ -96,33 +98,13 @@ Plans are detected in this order:
 
 ## Writing Good Plans
 
-A plan should be **specific and sequential**:
+**Use `/brainstorm` to write plans.** If you have [superpowers](https://github.com/anthropics/claude-code-superpowers) installed, just tell Claude your idea:
 
-```markdown
-# Add User Authentication
-
-## Steps
-
-1. Create `src/auth.py` with a `login(username, password)` function
-   - Hash password with bcrypt
-   - Return JWT token on success
-   - Raise AuthError on failure
-
-2. Add route in `src/routes.py`:
-   - POST /login → call auth.login()
-   - Return {"token": ...} or 401
-
-3. Add tests in `tests/test_auth.py`:
-   - test_login_success
-   - test_login_wrong_password
-   - test_login_unknown_user
+```
+/brainstorm add user authentication to the app
 ```
 
-**Tips:**
-- Be explicit about file paths
-- Include expected behavior
-- Break large changes into numbered steps
-- Reference existing code patterns when relevant
+Claude will ask clarifying questions, explore approaches, and write a detailed plan to `docs/plans/`. This is the recommended way to create plans.
 
 ## Managing Multiple Repos
 
@@ -131,18 +113,19 @@ For teams managing many repos, use the runner management tools:
 ```bash
 # Clone this repo for the tools
 git clone https://github.com/GiggleLiu/pr-resolver.git
-cd pr-resolver/.claude
+cd pr-resolver
 
-# Edit config to add your repos
+# Create config from template
+cp runner-config.example.toml runner-config.toml
 vi runner-config.toml
 
 # Setup all runners at once
-make -f runners.mk setup-all ANTHROPIC_API_KEY="sk-ant-..."
+make setup-all ANTHROPIC_API_KEY="sk-ant-..."
 
 # Manage runners
-make -f runners.mk status   # Check all
-make -f runners.mk restart  # Restart all
-make -f runners.mk stop     # Stop all
+make status    # Check all
+make restart   # Restart all
+make stop      # Stop all
 ```
 
 Configuration (`runner-config.toml`):

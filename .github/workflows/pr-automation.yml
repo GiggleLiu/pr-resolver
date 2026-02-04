@@ -13,7 +13,7 @@ jobs:
        startsWith(github.event.comment.body, '[fix]') ||
        startsWith(github.event.comment.body, '[debug]'))
 
-    runs-on: self-hosted
+    runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}
 
     permissions:
       contents: write
@@ -62,13 +62,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js (GitHub-hosted only)
-        if: ${{ !contains(runner.name, 'self-hosted') }}
+        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Claude Code CLI (GitHub-hosted only)
-        if: ${{ !contains(runner.name, 'self-hosted') }}
+        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Find plan file

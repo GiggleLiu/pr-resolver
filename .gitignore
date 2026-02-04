@@ -1,12 +1,3 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-.venv/
-venv/
-
 # IDE
 .idea/
 .vscode/
@@ -19,20 +10,12 @@ Thumbs.db
 
 # Logs
 *.log
-.claude/logs/*
-!.claude/logs/.gitkeep
-
-# SQLite databases
-*.db
-*.db-journal
 
 # Environment and secrets
 .env
 .env.local
-*.local.toml
-.claude/webhook/config.toml
-!.claude/webhook/config.example.toml
+.claude/settings.local.json
+runner-config.toml
 
-# Cloudflare credentials (created by setup)
-.cloudflared/
+# Debug
 debug.md

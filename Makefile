@@ -1,145 +1,124 @@
-# rcode Workspace Makefile
-# Scientific computing workspace with PR automation
+# PR Resolver - GitHub Actions Runner Management
+# Usage: make setup REPO=owner/repo ANTHROPIC_API_KEY=sk-ant-...
 
-.PHONY: help setup install-deps webhook-setup webhook-start webhook-stop \
-        tunnel-start tunnel-stop services-install services-start services-stop \
-        services-status logs logs-webhook logs-tunnel clean-logs test-webhook \
-        status
+SHELL := /bin/bash
+CONFIG_FILE := runner-config.toml
+BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
+REPOS := $(shell grep '^\s*repo\s*=' $(CONFIG_FILE) 2>/dev/null | cut -d'"' -f2)
 
-# Default target
+.PHONY: help setup setup-all status start stop restart remove list migrate
+
 help:
-	@echo "rcode Workspace Management"
+	@echo "PR Resolver - Runner Management"
 	@echo ""
-	@echo "Setup:"
-	@echo "  make setup            - Full setup (deps + webhook)"
-	@echo "  make install-deps     - Install Python dependencies"
-	@echo "  make webhook-setup    - Run webhook setup wizard"
+	@echo "Quick Start:"
+	@echo "  make setup REPO=owner/repo ANTHROPIC_API_KEY=sk-ant-..."
 	@echo ""
-	@echo "Services (manual):"
-	@echo "  make webhook-start    - Start webhook server (foreground)"
-	@echo "  make webhook-stop     - Stop webhook server"
-	@echo "  make tunnel-start     - Start Cloudflare tunnel (foreground)"
-	@echo "  make tunnel-stop      - Stop Cloudflare tunnel"
+	@echo "Multi-Repo Management:"
+	@echo "  make setup-all ANTHROPIC_API_KEY=sk-ant-...  # Setup all from config"
+	@echo "  make status                                  # Show all runner status"
+	@echo "  make start                                   # Start all runners"
+	@echo "  make stop                                    # Stop all runners"
+	@echo "  make restart                                 # Restart all runners"
+	@echo "  make remove REPO=owner/repo                  # Remove a runner"
+	@echo "  make list                                    # List configured repos"
 	@echo ""
-	@echo "Services (launchd - auto-start on boot):"
-	@echo "  make services-install - Install launchd services"
-	@echo "  make services-start   - Start all services"
-	@echo "  make services-stop    - Stop all services"
-	@echo "  make services-status  - Check service status"
-	@echo ""
-	@echo "Monitoring:"
-	@echo "  make status           - Check webhook health and queue"
-	@echo "  make logs             - Tail all logs"
-	@echo "  make logs-webhook     - Tail webhook server logs"
-	@echo "  make logs-tunnel      - Tail tunnel logs"
-	@echo ""
-	@echo "Maintenance:"
-	@echo "  make clean-logs       - Remove old log files"
-	@echo "  make test-webhook     - Test webhook endpoint"
+	@echo "Config: $(CONFIG_FILE)"
+	@echo "Runners: $(BASE_DIR)"
 
-# =============================================================================
-# Setup
-# =============================================================================
+setup:
+	@if [ -z "$(REPO)" ]; then \
+		echo "Error: REPO required"; \
+		echo "Usage: make setup REPO=owner/repo ANTHROPIC_API_KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	./setup-runner.sh "$(REPO)" "$(ANTHROPIC_API_KEY)"
 
-setup: install-deps webhook-setup
-	@echo "Setup complete!"
-
-install-deps:
-	@echo "Installing Python dependencies..."
-	pip3 install -r .claude/webhook/requirements.txt
-	@echo "Done."
-
-webhook-setup:
-	@echo "Running webhook setup wizard..."
-	.claude/scripts/setup-webhook.sh
-
-# =============================================================================
-# Manual Service Control
-# =============================================================================
-
-webhook-start:
-	@echo "Starting webhook server..."
-	@cd .claude/webhook && WEBHOOK_CONFIG=config.toml python3 server.py
-
-webhook-stop:
-	@echo "Stopping webhook server..."
-	@pkill -f "python3.*server.py" || echo "Webhook server not running"
-
-tunnel-start:
-	@echo "Starting Cloudflare tunnel..."
-	cloudflared tunnel run pr-webhook
-
-tunnel-stop:
-	@echo "Stopping Cloudflare tunnel..."
-	@pkill -f "cloudflared tunnel run" || echo "Tunnel not running"
-
-# =============================================================================
-# Launchd Services (macOS)
-# =============================================================================
-
-LAUNCHD_DIR := $(HOME)/Library/LaunchAgents
-WEBHOOK_PLIST := com.claude.webhook.plist
-TUNNEL_PLIST := com.claude.tunnel.plist
-
-services-install:
-	@echo "Installing launchd services..."
-	@mkdir -p $(LAUNCHD_DIR)
-	@cp .claude/launchd/$(WEBHOOK_PLIST) $(LAUNCHD_DIR)/
-	@cp .claude/launchd/$(TUNNEL_PLIST) $(LAUNCHD_DIR)/
-	@echo "Services installed. Run 'make services-start' to start them."
-
-services-start: services-install
-	@echo "Starting services..."
-	@launchctl load $(LAUNCHD_DIR)/$(TUNNEL_PLIST) 2>/dev/null || true
-	@launchctl load $(LAUNCHD_DIR)/$(WEBHOOK_PLIST) 2>/dev/null || true
-	@sleep 2
-	@$(MAKE) services-status
-
-services-stop:
-	@echo "Stopping services..."
-	@launchctl unload $(LAUNCHD_DIR)/$(WEBHOOK_PLIST) 2>/dev/null || true
-	@launchctl unload $(LAUNCHD_DIR)/$(TUNNEL_PLIST) 2>/dev/null || true
-	@echo "Services stopped."
-
-services-status:
-	@echo "Service status:"
-	@echo -n "  Webhook server: "
-	@launchctl list | grep -q com.claude.webhook && echo "running" || echo "stopped"
-	@echo -n "  Cloudflare tunnel: "
-	@launchctl list | grep -q com.claude.tunnel && echo "running" || echo "stopped"
-
-# =============================================================================
-# Monitoring
-# =============================================================================
+setup-all:
+	@if [ -z "$(ANTHROPIC_API_KEY)" ]; then \
+		echo "Error: ANTHROPIC_API_KEY required"; \
+		echo "Usage: make setup-all ANTHROPIC_API_KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	@for repo in $(REPOS); do \
+		echo ""; \
+		echo "=== Setting up $$repo ==="; \
+		./setup-runner.sh "$$repo" "$(ANTHROPIC_API_KEY)" || true; \
+	done
 
 status:
-	@echo "Checking webhook health..."
-	@curl -s http://localhost:8787/health 2>/dev/null | python3 -m json.tool || echo "Webhook server not responding"
+	@echo "Runner Status ($(BASE_DIR)):"
+	@echo ""
+	@for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/.runner" ]; then \
+			name=$$(basename "$$dir"); \
+			status=$$(cd "$$dir" && ./svc.sh status 2>&1 | grep -o 'Started\|Stopped' || echo 'Unknown'); \
+			printf "  %-40s %s\n" "$$name" "$$status"; \
+		fi \
+	done
 
-logs:
-	@echo "Tailing all logs (Ctrl+C to stop)..."
-	@tail -f .claude/logs/*.log
+start:
+	@echo "Starting all runners..."
+	@for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/svc.sh" ]; then \
+			(cd "$$dir" && ./svc.sh start 2>/dev/null) || true; \
+		fi \
+	done
+	@$(MAKE) -s status
 
-logs-webhook:
-	@echo "Tailing webhook logs (Ctrl+C to stop)..."
-	@tail -f .claude/logs/webhook*.log
+stop:
+	@echo "Stopping all runners..."
+	@for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/svc.sh" ]; then \
+			(cd "$$dir" && ./svc.sh stop 2>/dev/null) || true; \
+		fi \
+	done
 
-logs-tunnel:
-	@echo "Tailing tunnel logs (Ctrl+C to stop)..."
-	@tail -f .claude/logs/tunnel*.log
+restart: stop start
 
-# =============================================================================
-# Maintenance
-# =============================================================================
+remove:
+	@if [ -z "$(REPO)" ]; then \
+		echo "Error: REPO required"; \
+		echo "Usage: make remove REPO=owner/repo"; \
+		exit 1; \
+	fi
+	@REPO_NAME=$$(echo "$(REPO)" | tr '/' '-'); \
+	RUNNER_DIR="$(BASE_DIR)/$$REPO_NAME"; \
+	if [ -d "$$RUNNER_DIR" ]; then \
+		echo "Stopping and removing $$REPO_NAME..."; \
+		(cd "$$RUNNER_DIR" && ./svc.sh stop 2>/dev/null) || true; \
+		(cd "$$RUNNER_DIR" && ./svc.sh uninstall 2>/dev/null) || true; \
+		rm -rf "$$RUNNER_DIR"; \
+		echo "Removed $$RUNNER_DIR"; \
+	else \
+		echo "Runner not found: $$RUNNER_DIR"; \
+	fi
 
-clean-logs:
-	@echo "Removing log files older than 7 days..."
-	@find .claude/logs -name "*.log" -mtime +7 -delete 2>/dev/null || true
-	@echo "Done."
+list:
+	@echo "Configured repos:"
+	@for repo in $(REPOS); do \
+		echo "  $$repo"; \
+	done
 
-test-webhook:
-	@echo "Testing webhook endpoint..."
-	@curl -s -X POST http://localhost:8787/webhook \
-		-H "Content-Type: application/json" \
-		-H "X-GitHub-Event: ping" \
-		-d '{"zen": "test"}' | python3 -m json.tool || echo "Failed to reach webhook"
+migrate:
+	@echo "Migrating runners to $(BASE_DIR)..."
+	@mkdir -p "$(BASE_DIR)"
+	@for old_dir in ~/actions-runner ~/actions-runner-*; do \
+		if [ -d "$$old_dir" ] && [ -f "$$old_dir/.runner" ]; then \
+			name=$$(basename "$$old_dir" | sed 's/^actions-runner-//; s/^actions-runner$$//'); \
+			if [ -z "$$name" ]; then \
+				name=$$(grep -o '"[^"]*"' "$$old_dir/.runner" | head -1 | tr -d '"' | tr '/' '-'); \
+			fi; \
+			new_dir="$(BASE_DIR)/$$name"; \
+			if [ ! -d "$$new_dir" ]; then \
+				echo "  $$old_dir -> $$new_dir"; \
+				(cd "$$old_dir" && ./svc.sh stop 2>/dev/null) || true; \
+				(cd "$$old_dir" && ./svc.sh uninstall 2>/dev/null) || true; \
+				mv "$$old_dir" "$$new_dir"; \
+				(cd "$$new_dir" && ./svc.sh install && ./svc.sh start) || true; \
+			else \
+				echo "  Skipping $$old_dir ($$new_dir exists)"; \
+			fi \
+		fi \
+	done
+	@echo "Done. Run 'make status' to verify."
