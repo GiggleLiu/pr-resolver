@@ -1,89 +1,41 @@
 # PR Webhook Automation
 
-Automated PR processing system using GitHub webhooks and Claude Code. Trigger plan execution or review fixes by commenting on PRs.
+Automate PR workflows with Claude Code. Comment `[action]` or `[fix]` on any PR to trigger plan execution or review fixes.
 
-### Quick Start
+## Features
+
+- **Event-driven**: GitHub webhooks trigger jobs instantly (no polling)
+- **Reliable**: SQLite job queue with deduplication and failure handling
+- **Secure**: HMAC signature verification, configurable user allowlist
+- **Simple**: Single Python server, no external dependencies beyond `cloudflared`
+
+## Quick Start
 
 ```bash
-# One-time setup
+# 1. Clone and setup
+git clone https://github.com/user/pr-resolver.git
+cd pr-resolver
 make setup
 
-# Start services (auto-restart on boot)
+# 2. Start services
 make services-start
 
-# Check status
+# 3. Verify
 make status
 ```
 
-### Quick Tunnel Mode (China / SSL issues)
-
-If you're in an environment where Cloudflare's Universal SSL isn't available (e.g., China), use the Quick Tunnel script:
-
-```bash
-# Start Quick Tunnel with auto-webhook-update
-.claude/scripts/start-tunnel.sh
-
-# This will:
-# 1. Start a new Quick Tunnel (URL changes each restart)
-# 2. Automatically update all GitHub webhook URLs
-# 3. Print the new tunnel URL
-```
-
-Note: Quick Tunnel URLs change on restart. The script handles this by automatically updating all configured webhook URLs.
-
-### PR Commands
+## PR Commands
 
 Comment on any PR to trigger automation:
 
 | Command | Action |
 |---------|--------|
-| `[action]` | Execute the plan file (PLAN.md) |
+| `[action]` | Execute the plan file |
 | `[fix]` | Address review comments |
 | `[status]` | Check queue status |
-| `[debug]` | Test full pipeline (posts [pass] or [fail]) |
+| `[debug]` | Test the full pipeline |
 
-### Make Targets
-
-```bash
-make help              # Show all available targets
-```
-
-**Setup:**
-```bash
-make setup             # Full setup (deps + webhook wizard)
-make install-deps      # Install Python dependencies only
-make webhook-setup     # Run webhook setup wizard
-```
-
-**Services (launchd - recommended):**
-```bash
-make services-install  # Install launchd services
-make services-start    # Start all services
-make services-stop     # Stop all services
-make services-status   # Check service status
-```
-
-**Services (manual - for testing):**
-```bash
-make webhook-start     # Start webhook server (foreground)
-make tunnel-start      # Start Cloudflare tunnel (foreground)
-make webhook-stop      # Stop webhook server
-make tunnel-stop       # Stop tunnel
-```
-
-**Monitoring:**
-```bash
-make status            # Check webhook health and queue
-make logs              # Tail all logs
-make logs-webhook      # Tail webhook server logs
-make logs-tunnel       # Tail tunnel logs
-```
-
-**Maintenance:**
-```bash
-make clean-logs        # Remove log files older than 7 days
-make test-webhook      # Test webhook endpoint
-```
+Plan files are detected in order: `PLAN.md`, `plan.md`, `.claude/plan.md`, `docs/plan.md`, or any file in `docs/plans/*.md`.
 
 ## Architecture
 
@@ -91,16 +43,14 @@ make test-webhook      # Test webhook endpoint
 GitHub PR Comment
        │
        ▼
-GitHub Webhook ──► Cloudflare Tunnel ──► Webhook Server ──► Job Queue ──► Claude Worker
-                                              │                                │
-                                              └──────── Status Comments ◄──────┘
+GitHub Webhook ──► Cloudflare Tunnel ──► Webhook Server ──► Job Queue ──► Claude
+                                              │                              │
+                                              └────── Status Comments ◄──────┘
 ```
-
-See [docs/plans/2026-02-04-pr-webhook-design.md](./docs/plans/2026-02-04-pr-webhook-design.md) for detailed design.
 
 ## Configuration
 
-After running `make setup`, edit `.claude/webhook/config.toml`:
+After `make setup`, edit `.claude/webhook/config.toml`:
 
 ```toml
 [github]
@@ -111,89 +61,115 @@ webhook_secret = "..."          # Generated during setup
 timeout_minutes = 30            # Max job runtime
 max_turns = 100                 # Max Claude API turns
 
-[paths]
-log_dir = "~/.claude/logs"
-
-# Repositories to watch - add each repo you want to automate
+# Option 1: List repos explicitly
 [[repos]]
-github = "owner/repo1"          # GitHub repo (owner/name)
-path = "~/projects/repo1"       # Local path to the repo
+github = "owner/repo"
+path = "~/projects/repo"
 
-[[repos]]
-github = "owner/repo2"
-path = "~/projects/repo2"
-
-# Alternative: watch all repos in a directory
-# [repos_dir]
-# path = "~/projects"
-# max_depth = 2
+# Option 2: Watch all repos in a directory
+[repos_dir]
+path = "~/projects"
+max_depth = 2
 ```
 
-Only configured repositories will accept webhook commands. Unconfigured repos are ignored.
-
-## Directory Structure
-
-```
-pr-webhook/
-├── .claude/
-│   ├── webhook/           # Webhook server
-│   │   ├── server.py      # FastAPI app + worker
-│   │   ├── config.toml    # Your configuration
-│   │   └── jobs.db        # SQLite job queue (auto-created)
-│   ├── scripts/           # Setup and utility scripts
-│   ├── skills/            # Claude Code skills
-│   ├── launchd/           # macOS service plists (auto-created)
-│   └── logs/              # Log files
-├── docs/plans/            # Design documents
-├── Makefile               # Automation commands
-├── CLAUDE.md              # Claude Code guidance
-└── README.md              # This file
-```
-
-## How It Works
-
-1. You configure which repos to watch in `config.toml`
-2. For each repo, add a GitHub webhook pointing to your tunnel URL
-3. When you comment `[action]` or `[fix]` on a PR, GitHub sends a webhook
-4. The server queues the job and Claude Code executes it
-5. Status comments (`[executing]`, `[done]`, `[failed]`) are posted back to the PR
-
-## Setup Notes
-
-### Cloudflare Login
-
-When `cloudflared tunnel login` asks you to select a zone, **pick any zone** you have access to. This is just for authentication - your tunnel will use a free `*.cfargotunnel.com` URL regardless of which zone you select.
-
-### Adding Webhooks via CLI
-
-Instead of configuring webhooks through GitHub's web UI, you can use `gh`:
+## Make Targets
 
 ```bash
-# Get your webhook URL and secret from config
-WEBHOOK_URL="https://<tunnel-id>.cfargotunnel.com/webhook"
+make help              # Show all targets
+
+# Setup
+make setup             # Full setup wizard
+make install-deps      # Install Python dependencies
+
+# Services (launchd)
+make services-start    # Start webhook + tunnel
+make services-stop     # Stop all services
+make services-status   # Check status
+
+# Manual (for testing)
+make webhook-start     # Start webhook server
+make tunnel-start      # Start tunnel
+
+# Monitoring
+make status            # Health check
+make logs              # Tail all logs
+```
+
+## Adding Webhooks
+
+Use the GitHub CLI to add webhooks:
+
+```bash
+WEBHOOK_URL="https://your-tunnel.trycloudflare.com/webhook"
 SECRET=$(grep webhook_secret .claude/webhook/config.toml | cut -d'"' -f2)
 
-# Create webhook for a repo
 gh api repos/OWNER/REPO/hooks --method POST --input - <<EOF
-{
-  "config": {"url": "$WEBHOOK_URL", "content_type": "json", "secret": "$SECRET"},
-  "events": ["issue_comment"],
-  "active": true
-}
+{"config":{"url":"$WEBHOOK_URL","content_type":"json","secret":"$SECRET"},"events":["issue_comment"],"active":true}
 EOF
 ```
 
-### Adding Webhooks for All Repos in a Directory
+Or add webhooks for all repos in a directory:
 
 ```bash
 for dir in ~/projects/*/; do
-  cd "$dir"
-  repo=$(git remote get-url origin 2>/dev/null | sed -E 's|.*github.com[:/]||;s|\.git$||')
+  repo=$(cd "$dir" && git remote get-url origin 2>/dev/null | sed -E 's|.*github.com[:/]||;s|\.git$||')
   [ -n "$repo" ] && gh api "repos/$repo/hooks" --method POST --input - <<EOF
 {"config":{"url":"$WEBHOOK_URL","content_type":"json","secret":"$SECRET"},"events":["issue_comment"],"active":true}
 EOF
 done
 ```
+
+## Directory Structure
+
+```
+pr-resolver/
+├── .claude/
+│   ├── webhook/
+│   │   ├── server.py          # FastAPI server + worker
+│   │   ├── config.toml        # Your config (git-ignored)
+│   │   └── config.example.toml
+│   ├── scripts/
+│   │   ├── setup-webhook.sh   # Setup wizard
+│   │   └── start-tunnel.sh    # Quick tunnel helper
+│   ├── launchd/               # macOS service plists
+│   └── logs/                  # Log files (git-ignored)
+├── docs/plans/                # Design documents
+├── Makefile
+├── CLAUDE.md
+└── README.md
+```
+
+## Requirements
+
+- Python 3.9+
+- [Claude Code CLI](https://claude.ai/code)
+- [GitHub CLI](https://cli.github.com/) (`gh`)
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/) (`cloudflared`)
+
+## Troubleshooting
+
+### Cloudflare Login Zone Selection
+
+When `cloudflared tunnel login` asks you to select a zone, pick **any zone** you have access to. This is just for authentication.
+
+### PATH Issues in launchd
+
+If `gh` or `claude` commands fail, ensure `/opt/homebrew/bin` (or your install path) is in the PATH environment variable in the launchd plist.
+
+### Quick Tunnel Mode (Alternative)
+
+If you cannot use named tunnels (e.g., Cloudflare Universal SSL unavailable in your region), use Quick Tunnel mode:
+
+```bash
+.claude/scripts/start-tunnel.sh
+```
+
+This script:
+1. Starts a Quick Tunnel (URL changes on restart)
+2. Automatically updates all GitHub webhook URLs
+3. Prints the new tunnel URL
+
+Run this script each time you restart the tunnel.
 
 ## License
 
