@@ -23,7 +23,7 @@ help:
 	@echo "  make start                                   # Start all runners"
 	@echo "  make stop                                    # Stop all runners"
 	@echo "  make restart                                 # Restart all runners"
-	@echo "  make remove REPO=owner/repo                  # Remove a runner"
+	@echo "  make remove REPO=owner/repo [KEEP_DATA=1]   # Remove a runner"
 	@echo "  make list                                    # List configured repos"
 	@echo "  make clean                                   # Clean caches (saves ~3GB)"
 	@echo ""
@@ -91,17 +91,23 @@ restart: stop start
 remove:
 	@if [ -z "$(REPO)" ]; then \
 		echo "Error: REPO required"; \
-		echo "Usage: make remove REPO=owner/repo"; \
+		echo "Usage: make remove REPO=owner/repo [KEEP_DATA=1]"; \
+		echo "  KEEP_DATA=1  Unregister runner but keep directory (.env, logs, etc.)"; \
 		exit 1; \
 	fi
 	@REPO_NAME=$$(echo "$(REPO)" | tr '/' '-'); \
 	RUNNER_DIR="$(BASE_DIR)/$$REPO_NAME"; \
 	if [ -d "$$RUNNER_DIR" ]; then \
-		echo "Stopping and removing $$REPO_NAME..."; \
+		echo "Stopping runner $$REPO_NAME..."; \
 		(cd "$$RUNNER_DIR" && ./svc.sh stop 2>/dev/null) || true; \
 		(cd "$$RUNNER_DIR" && ./svc.sh uninstall 2>/dev/null) || true; \
-		rm -rf "$$RUNNER_DIR"; \
-		echo "Removed $$RUNNER_DIR"; \
+		if [ "$(KEEP_DATA)" = "1" ]; then \
+			echo "Unregistered runner (kept directory: $$RUNNER_DIR)"; \
+			echo "To re-register: make setup REPO=$(REPO)"; \
+		else \
+			rm -rf "$$RUNNER_DIR"; \
+			echo "Removed $$RUNNER_DIR"; \
+		fi \
 	else \
 		echo "Runner not found: $$RUNNER_DIR"; \
 	fi
