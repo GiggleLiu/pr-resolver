@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude
+.PHONY: help update status start stop restart list clean init-claude round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -24,6 +24,7 @@ help:
 	@echo "  make list                    # List configured repos"
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
+	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
 	@echo "Runners: $(BASE_DIR)"
@@ -126,3 +127,51 @@ init-claude:
 	fi
 	@echo ""
 	@echo "Done."
+
+round-trip:
+	@echo "=== Round-trip test ==="
+	@BRANCH="test/round-trip-$$(date +%s)"; \
+	REPO=$$(gh repo view --json nameWithOwner -q .nameWithOwner); \
+	echo ""; \
+	echo "Step 1: Create branch and plan file..."; \
+	git checkout -b $$BRANCH; \
+	mkdir -p docs/plans; \
+	echo "# Round-trip Test Plan" > docs/plans/test.md; \
+	echo "" >> docs/plans/test.md; \
+	echo "Create a file \`test-output.txt\` with content:" >> docs/plans/test.md; \
+	echo "\`\`\`" >> docs/plans/test.md; \
+	echo "Round-trip test successful!" >> docs/plans/test.md; \
+	echo "Timestamp: $$(date)" >> docs/plans/test.md; \
+	echo "\`\`\`" >> docs/plans/test.md; \
+	git add docs/plans/test.md; \
+	git commit -m "Add round-trip test plan"; \
+	git push -u origin $$BRANCH; \
+	echo ""; \
+	echo "Step 2: Create PR..."; \
+	PR_URL=$$(gh pr create --title "Round-trip test" --body "Automated test of PR automation pipeline." --head $$BRANCH); \
+	PR_NUM=$$(echo $$PR_URL | grep -o '[0-9]*$$'); \
+	echo "Created PR #$$PR_NUM"; \
+	echo ""; \
+	echo "Step 3: Trigger [action]..."; \
+	gh pr comment $$PR_NUM --body "[action]"; \
+	echo ""; \
+	echo "Step 4: Waiting for workflow..."; \
+	sleep 5; \
+	RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId'); \
+	echo "Workflow run: $$RUN_ID"; \
+	gh run watch $$RUN_ID || true; \
+	echo ""; \
+	echo "Step 5: Trigger [fix]..."; \
+	gh pr comment $$PR_NUM --body "[fix] Clean up the plan file after test."; \
+	echo ""; \
+	echo "Step 6: Waiting for fix workflow..."; \
+	sleep 5; \
+	RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId'); \
+	echo "Workflow run: $$RUN_ID"; \
+	gh run watch $$RUN_ID || true; \
+	echo ""; \
+	echo "Step 7: Close PR..."; \
+	gh pr close $$PR_NUM --delete-branch; \
+	echo ""; \
+	echo "=== Round-trip complete ==="; \
+	git checkout main
