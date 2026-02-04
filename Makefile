@@ -156,17 +156,18 @@ round-trip:
 	gh pr comment $$PR_NUM --body "[action]"; \
 	echo ""; \
 	echo "Step 4: Waiting for [action] workflow..."; \
-	for i in 1 2 3 4 5 6; do \
-		sleep 5; \
-		RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
-		[ -n "$$RUN_ID" ] && break; \
+	PREV_RUN=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
+	for i in 1 2 3 4 5 6 7 8 9 10; do \
+		sleep 3; \
+		RUN_ID=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
+		[ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ] && break; \
 		echo "  waiting for workflow to start..."; \
 	done; \
-	if [ -n "$$RUN_ID" ]; then \
+	if [ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ]; then \
 		echo "  Workflow: $$RUN_ID"; \
-		gh run watch $$RUN_ID --exit-status || echo "  Workflow completed (check status)"; \
+		gh run watch $$RUN_ID --exit-status || echo "  Workflow failed (continuing...)"; \
 	else \
-		echo "  Warning: Could not find workflow run"; \
+		echo "  Warning: Could not find new workflow run"; \
 	fi; \
 	echo ""; \
 	echo "Step 5: Trigger [fix]..."; \
@@ -174,17 +175,17 @@ round-trip:
 	PREV_RUN=$$RUN_ID; \
 	echo ""; \
 	echo "Step 6: Waiting for [fix] workflow..."; \
-	for i in 1 2 3 4 5 6; do \
-		sleep 5; \
-		RUN_ID=$$(gh run list --branch $$BRANCH --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
+	for i in 1 2 3 4 5 6 7 8 9 10; do \
+		sleep 3; \
+		RUN_ID=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
 		[ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ] && break; \
 		echo "  waiting for workflow to start..."; \
 	done; \
 	if [ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ]; then \
 		echo "  Workflow: $$RUN_ID"; \
-		gh run watch $$RUN_ID --exit-status || echo "  Workflow completed (check status)"; \
+		gh run watch $$RUN_ID --exit-status || echo "  Workflow failed (continuing...)"; \
 	else \
-		echo "  Warning: Could not find workflow run"; \
+		echo "  Warning: Could not find new workflow run"; \
 	fi; \
 	echo ""; \
 	echo "Step 7: Close PR..."; \
