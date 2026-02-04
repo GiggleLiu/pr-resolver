@@ -394,15 +394,10 @@ class Worker:
 
         self.logger.info(f"Processing job {job_id}: {repo}#{pr_number} [{command}]")
 
-        # Mark as running
+        # Mark as running (no comment - [queued] was already posted)
         self.queue.update_status(job_id, "running")
 
-        # Post starting comment
-        if command == "action":
-            post_comment(repo, pr_number, "[executing] Starting plan execution...", self.logger)
-        elif command == "fix":
-            post_comment(repo, pr_number, "[fixing] Addressing review comments...", self.logger)
-        elif command == "status":
+        if command == "status":
             # Status is handled immediately in webhook, shouldn't reach here
             self.queue.update_status(job_id, "done")
             return
