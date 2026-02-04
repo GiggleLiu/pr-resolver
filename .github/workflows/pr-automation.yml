@@ -71,6 +71,9 @@ jobs:
         if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Install superpowers plugin
+        run: claude plugins add anthropics/claude-code-superpowers --yes 2>/dev/null || true
+
       - name: Find plan file
         id: plan
         if: steps.pr.outputs.command == 'action'
@@ -94,18 +97,14 @@ jobs:
           Execute the plan in '${{ steps.plan.outputs.file }}'.
 
           ## Process
-          1. Read the plan file carefully
-          2. Break it into discrete tasks
-          3. For each task:
-             - Implement the change
-             - Run tests if available (make test, cargo test, npm test, etc.)
-             - Commit with descriptive message
-          4. Push: git push origin ${{ steps.pr.outputs.branch }}
-          5. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
+          1. Read the plan file
+          2. Use /subagent-driven-development to execute tasks
+          3. Push: git push origin ${{ steps.pr.outputs.branch }}
+          4. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
 
           ## Rules
           - Read existing code before modifying
-          - Only implement what is in the plan (no scope creep)
+          - Only implement what is in the plan
           - Stop and report if a step fails
           " 2>&1 | tee claude-output.txt
 
@@ -148,18 +147,17 @@ jobs:
           $CI_LOGS
 
           ## Process
-          1. Analyze review comments - understand requested changes
-          2. Analyze CI failures - understand what broke
-          3. Fix all issues
-          4. Run tests locally to verify fixes
-          5. Commit: git commit -am 'Fix review feedback and CI issues'
-          6. Push: git push origin ${{ steps.pr.outputs.branch }}
-          7. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
+          1. Use /systematic-debugging if CI failed
+          2. Fix review comments and CI issues
+          3. Run tests to verify: make test, cargo test, npm test, etc.
+          4. Commit: git commit -am 'Fix review feedback and CI issues'
+          5. Push: git push origin ${{ steps.pr.outputs.branch }}
+          6. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
 
           ## Rules
           - Fix ALL issues, not just some
-          - If CI failed due to tests, make tests pass
-          - If CI failed due to lint/format, fix those too
+          - Make tests pass
+          - Fix lint/format errors
           " 2>&1 | tee claude-output.txt
 
       - name: Debug test
