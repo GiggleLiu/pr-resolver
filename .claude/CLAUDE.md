@@ -15,6 +15,10 @@ make start                               # Start all runners
 make stop                                # Stop all runners
 make restart                             # Restart all runners
 make list                                # List configured repos
+make clean                               # Clean caches (saves ~3GB)
+make init-claude                         # Install Claude CLI + superpowers
+make setup-key KEY=sk-ant-...            # Set API key for all runners
+make round-trip                          # End-to-end test
 ```
 
 ## Architecture
@@ -54,7 +58,7 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 | Command | Action |
 |---------|--------|
 | `[action]` | Execute plan file (PLAN.md, plan.md, .claude/plan.md, docs/plan.md, or docs/plans/*.md) |
-| `[fix]` | Fetch review comments and address them |
+| `[fix]` | Fix review comments AND CI failures |
 | `[debug]` | Test workflow pipeline (creates test comment) |
 
 ## Status Reporting
@@ -76,8 +80,9 @@ After execution, Claude posts a summary comment describing what was done.
 # 2. Sync runners
 make update
 
-# 3. Add API key (once per runner)
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/owner-repo/.env
+# 3. Set API key for all runners
+make setup-key KEY=sk-ant-...
+make restart
 ```
 
 ### Remove a Runner

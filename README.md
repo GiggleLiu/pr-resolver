@@ -50,13 +50,17 @@ The workflow needs a GitHub Actions runner. Choose one:
 git clone https://github.com/GiggleLiu/pr-resolver.git
 cd pr-resolver
 
+# Install Claude CLI and superpowers plugin
+make init-claude
+
 # Add your repo to config (edit runner-config.toml, add to repos array)
 
 # Sync runners (sets up workflow, runner, and config)
 make update
 
-# Add API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/your-username-your-repo/.env
+# Set API key for all runners
+make setup-key KEY=sk-ant-...
+make restart
 ```
 
 #### GitHub-hosted
@@ -84,7 +88,7 @@ Comment these on any PR:
 | Command | What happens |
 |---------|--------------|
 | `[action]` | Execute the plan file |
-| `[fix]` | Address review comments |
+| `[fix]` | Address review comments AND fix CI failures |
 | `[debug]` | Test the pipeline (creates a test comment) |
 
 ## Plan Files
@@ -121,10 +125,12 @@ repos = [
 ```
 
 ```bash
-make update    # Sync: add missing runners, remove unlisted
-make status    # Check all
-make restart   # Restart all
-make stop      # Stop all
+make update                  # Sync: add missing runners, remove unlisted
+make status                  # Check all runner statuses
+make start / stop / restart  # Control runners
+make setup-key KEY=sk-ant-...  # Set API key for all runners
+make init-claude             # Install Claude CLI + superpowers
+make round-trip              # End-to-end test
 ```
 
 ## How It Works
@@ -164,11 +170,8 @@ make start    # Start all runners
 
 ### "Invalid API key" error
 ```bash
-# Check .env has the key
-cat ~/actions-runners/your-repo/.env
-
-# Add if missing
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/your-repo/.env
+# Set API key for all runners at once
+make setup-key KEY=sk-ant-...
 make restart
 ```
 
