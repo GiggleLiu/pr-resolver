@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -24,6 +24,7 @@ help:
 	@echo "  make list                    # List configured repos"
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
+	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
 	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
@@ -108,6 +109,27 @@ clean:
 	@echo "After:  $$(du -sh $(BASE_DIR) | cut -f1)"
 	@echo ""
 	@echo "Note: _work/_tool/ kept (cached tools). To remove: rm -rf $(BASE_DIR)/*/_work/_tool"
+
+setup-key:
+	@if [ -z "$(KEY)" ]; then \
+		echo "Error: KEY required"; \
+		echo "Usage: make setup-key KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	@echo "Setting API key for all runners..."
+	@for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/.runner" ]; then \
+			name=$$(basename "$$dir"); \
+			if grep -q "ANTHROPIC_API_KEY" "$$dir/.env" 2>/dev/null; then \
+				sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$(KEY)|" "$$dir/.env" && rm -f "$$dir/.env.bak"; \
+				echo "  [updated] $$name"; \
+			else \
+				echo "ANTHROPIC_API_KEY=$(KEY)" >> "$$dir/.env"; \
+				echo "  [added] $$name"; \
+			fi; \
+		fi; \
+	done
+	@echo "Done. Run 'make restart' to apply."
 
 init-claude:
 	@echo "Checking Claude CLI and superpowers setup..."
