@@ -3,7 +3,7 @@
 PR Webhook Server
 
 Event-driven PR automation using GitHub webhooks.
-Handles [action], [fix], and [status] commands from PR comments.
+Handles [action], [fix], [status], and [debug] commands from PR comments.
 """
 
 import hashlib
@@ -468,6 +468,8 @@ class Worker:
             prompt = self._build_action_prompt(repo_dir, repo, pr_number, branch)
         elif command == "fix":
             prompt = self._build_fix_prompt(repo_dir, repo, pr_number, branch)
+        elif command == "debug":
+            prompt = self._build_debug_prompt(repo, pr_number)
         else:
             self.queue.update_status(job_id, "done")
             return
@@ -590,6 +592,18 @@ Instructions:
 Do NOT post comments to the PR - the system will handle that.
 """
 
+    def _build_debug_prompt(self, repo: str, pr_number: int) -> str:
+        """Build prompt for [debug] command - simple round-trip test."""
+        return f"""
+This is a debug test to verify the webhook pipeline is working.
+
+Your task:
+1. Post a comment to PR #{pr_number} on repository {repo} with the text: [pass] Webhook pipeline test successful
+2. Use this exact command: gh pr comment {pr_number} --repo {repo} --body "[pass] Webhook pipeline test successful"
+
+That's it. Just post the comment and exit. Do not do anything else.
+"""
+
 # =============================================================================
 # FastAPI Application
 # =============================================================================
@@ -683,7 +697,7 @@ async def webhook(
     comment_body = payload.get("comment", {}).get("body", "")
     first_line = comment_body.split("\n")[0].strip()
 
-    command_match = re.match(r"^\[(action|fix|status)\]", first_line, re.IGNORECASE)
+    command_match = re.match(r"^\[(action|fix|status|debug)\]", first_line, re.IGNORECASE)
     if not command_match:
         return {"status": "ignored", "reason": "no command found"}
 

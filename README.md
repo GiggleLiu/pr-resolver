@@ -40,6 +40,7 @@ Comment on any PR to trigger automation:
 | `[action]` | Execute the plan file (PLAN.md) |
 | `[fix]` | Address review comments |
 | `[status]` | Check queue status |
+| `[debug]` | Test full pipeline (posts [pass] or [fail]) |
 
 ### Make Targets
 
