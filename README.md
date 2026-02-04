@@ -155,38 +155,52 @@ pr-resolver/
 - [GitHub CLI](https://cli.github.com/) (`gh`)
 - [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/) (`cloudflared`)
 
-## GitHub Actions (Alternative)
+## GitHub Actions (Recommended)
 
-Use GitHub Actions instead of a local webhook server. Two options:
+Use GitHub Actions for simpler setup - no webhook server or tunnel needed.
 
-### Option A: Self-hosted Runner (Recommended)
+### Setup
 
-Run Claude on your local machine, triggered by GitHub:
+1. **Copy workflow to your repo:**
+   ```bash
+   mkdir -p .github/workflows
+   cp /path/to/pr-resolver/.github/workflows/pr-automation.yml .github/workflows/
+   git add .github/workflows && git commit -m "Add PR automation workflow" && git push
+   ```
+
+2. **Configure runner** (choose one):
+
+   | Runner | Setup | API Key |
+   |--------|-------|---------|
+   | **Self-hosted** | [Add runner](https://docs.github.com/en/actions/hosting-your-own-runners) to your repo | Set in `~/actions-runner/.env` |
+   | **GitHub-hosted** | Change `runs-on: self-hosted` to `runs-on: ubuntu-latest` | Set in repo secrets |
+
+3. **Comment `[action]` on any PR** - workflow triggers automatically
+
+### Self-hosted Runner Setup (macOS)
 
 ```bash
-# 1. Add self-hosted runner to your repo
-#    Go to: Settings → Actions → Runners → New self-hosted runner
-#    Follow the instructions to install and start the runner
+# Download and configure
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -O -L https://github.com/actions/runner/releases/download/v2.321.0/actions-runner-osx-arm64-2.321.0.tar.gz
+tar xzf actions-runner-osx-arm64-2.321.0.tar.gz
+./config.sh --url https://github.com/OWNER/REPO --token YOUR_TOKEN
 
-# 2. Copy workflow to your repo
-cp .github/workflows/pr-automation.yml /path/to/your-repo/.github/workflows/
+# Add API key
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 
-# 3. Comment [action] on a PR - it runs on your machine!
+# Install and start as service
+./svc.sh install && ./svc.sh start
 ```
 
-**Pros:** Uses local Claude installation, fast, no API key in GitHub
-**Cons:** Machine must be online
+### GitHub-hosted Runner Setup
 
-### Option B: GitHub-hosted Runner
+1. Edit workflow: change `runs-on: self-hosted` to `runs-on: ubuntu-latest`
+2. Add secret: Settings → Secrets → Actions → `ANTHROPIC_API_KEY`
 
-Run Claude on GitHub's infrastructure:
+### Status Checks
 
-1. Change `runs-on: self-hosted` to `runs-on: ubuntu-latest` in the workflow
-2. Add `ANTHROPIC_API_KEY` to repository secrets (Settings → Secrets)
-3. Comment `[action]` on any PR
-
-**Pros:** No local machine needed, works from anywhere
-**Cons:** Slower (installs Claude each run), uses Actions minutes
+The workflow reports status directly on the PR (pending → success/failure), visible in the PR's checks section.
 
 ## Troubleshooting
 

@@ -132,6 +132,42 @@ curl http://localhost:8787/health
 make test-webhook
 ```
 
+## GitHub Actions (Recommended)
+
+Simpler alternative to webhook server - no tunnel needed.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
+
+### How It Works
+
+1. User comments `[action]` on PR → GitHub triggers workflow
+2. Workflow checks out PR branch, finds plan file
+3. Runs `claude --dangerously-skip-permissions` to execute plan
+4. Reports status via commit status API (shows in PR checks)
+
+### Runner Configuration
+
+**Self-hosted runner** (recommended):
+```bash
+# API key in runner environment
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runner/.env
+cd ~/actions-runner && ./svc.sh stop && ./svc.sh start
+```
+
+**GitHub-hosted runner**:
+- Set `ANTHROPIC_API_KEY` in repository secrets
+- Change `runs-on: self-hosted` to `runs-on: ubuntu-latest`
+
+### Workflow Supports Both
+
+The workflow automatically uses:
+1. Repository secret `ANTHROPIC_API_KEY` if set
+2. Otherwise, runner's environment variable
+
 ## Quick Tunnel Mode (China / SSL issues)
 
 If Cloudflare's Universal SSL isn't available (common in China), use Quick Tunnel:
@@ -148,12 +184,3 @@ This script:
 4. Prints the new URL and PID
 
 Quick Tunnel URLs change on each restart, so run this script whenever you restart the tunnel.
-
-### Why Quick Tunnel?
-
-Named tunnels require:
-- Domain with nameservers pointing to Cloudflare
-- Universal SSL certificate coverage for subdomains
-- Proper DNS CNAME record pointing to `<tunnel-id>.cfargotunnel.com`
-
-In environments where Universal SSL isn't available, the named tunnel will return 502 errors. Quick Tunnels work around this by using Cloudflare's `trycloudflare.com` domain which has SSL already configured.
