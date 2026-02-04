@@ -45,19 +45,24 @@ The workflow needs a GitHub Actions runner. Choose one:
 
 #### Self-hosted (recommended)
 
+**One-command setup** (if you cloned this repo):
 ```bash
-# Get setup script
-curl -O https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/setup-runner.sh
-chmod +x setup-runner.sh
-
-# Run it (get token from: Settings → Actions → Runners → New)
-export ANTHROPIC_API_KEY="sk-ant-..."
-./setup-runner.sh your-username/your-repo
+make add-repo REPO=your-username/your-repo ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-Then set repository variable (Settings → Secrets and variables → Actions → Variables):
-- Name: `RUNNER_TYPE`
-- Value: `self-hosted`
+This automatically:
+- Adds the workflow file to your repo
+- Sets up a self-hosted runner
+- Configures the `RUNNER_TYPE` variable
+- Adds the repo to your config
+
+**Manual setup:**
+```bash
+curl -O https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/setup-runner.sh
+chmod +x setup-runner.sh
+./setup-runner.sh your-username/your-repo
+```
+Then set repository variable `RUNNER_TYPE=self-hosted` (Settings → Variables → Actions).
 
 #### GitHub-hosted
 
@@ -171,9 +176,8 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 
 ### Runner shows "offline"
 ```bash
-cd ~/actions-runners/your-repo
-./svc.sh status  # Check if running
-./svc.sh start   # Start if stopped
+make status   # Check all runners
+make start    # Start all runners
 ```
 
 ### "Invalid API key" error
@@ -183,7 +187,7 @@ cat ~/actions-runners/your-repo/.env
 
 # Add if missing
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> ~/actions-runners/your-repo/.env
-./svc.sh restart
+make restart
 ```
 
 ### Workflow not triggering

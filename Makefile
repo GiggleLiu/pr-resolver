@@ -6,16 +6,19 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep '^\s*repo\s*=' $(CONFIG_FILE) 2>/dev/null | cut -d'"' -f2)
 
-.PHONY: help setup setup-all status start stop restart remove list migrate
+.PHONY: help add-repo setup setup-all status start stop restart remove list migrate
 
 help:
 	@echo "PR Resolver - Runner Management"
 	@echo ""
 	@echo "Quick Start:"
-	@echo "  make setup REPO=owner/repo ANTHROPIC_API_KEY=sk-ant-..."
+	@echo "  make add-repo REPO=owner/repo                # Full setup (workflow + runner + config)"
 	@echo ""
-	@echo "Multi-Repo Management:"
-	@echo "  make setup-all ANTHROPIC_API_KEY=sk-ant-...  # Setup all from config"
+	@echo "Manual Setup:"
+	@echo "  make setup REPO=owner/repo                   # Setup runner only"
+	@echo "  make setup-all ANTHROPIC_API_KEY=...        # Setup all from config"
+	@echo ""
+	@echo "Runner Management:"
 	@echo "  make status                                  # Show all runner status"
 	@echo "  make start                                   # Start all runners"
 	@echo "  make stop                                    # Stop all runners"
@@ -25,6 +28,14 @@ help:
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
 	@echo "Runners: $(BASE_DIR)"
+
+add-repo:
+	@if [ -z "$(REPO)" ]; then \
+		echo "Error: REPO required"; \
+		echo "Usage: make add-repo REPO=owner/repo ANTHROPIC_API_KEY=sk-ant-..."; \
+		exit 1; \
+	fi
+	./add-repo.sh "$(REPO)" "$(ANTHROPIC_API_KEY)"
 
 setup:
 	@if [ -z "$(REPO)" ]; then \

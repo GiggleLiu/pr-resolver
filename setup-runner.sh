@@ -3,10 +3,33 @@
 # Usage: ./setup-runner.sh owner/repo [API_KEY]
 # Config: runner-config.toml
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/runner-config.toml"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+error() { echo -e "${RED}Error: $1${NC}" >&2; exit 1; }
+info() { echo -e "${GREEN}$1${NC}"; }
+warn() { echo -e "${YELLOW}$1${NC}"; }
+
+# Check prerequisites
+check_prerequisites() {
+    if ! command -v gh &> /dev/null; then
+        error "GitHub CLI (gh) is required but not installed.
+Install it from: https://cli.github.com/
+  macOS:   brew install gh
+  Ubuntu:  sudo apt install gh
+  Windows: winget install GitHub.cli"
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        error "GitHub CLI not authenticated. Run: gh auth login"
+    fi
+}
 
 # Read base_dir from config or use default
 if [ -f "$CONFIG_FILE" ]; then
@@ -29,6 +52,12 @@ if [ -z "$REPO" ]; then
   exit 1
 fi
 
+if [[ ! "$REPO" =~ ^[^/]+/[^/]+$ ]]; then
+    error "Invalid repo format. Use: owner/repo"
+fi
+
+check_prerequisites
+
 # Derive runner name from repo
 REPO_NAME=$(echo "$REPO" | tr '/' '-')
 RUNNER_DIR="$BASE_DIR/$REPO_NAME"
@@ -39,7 +68,7 @@ echo "  Version: $RUNNER_VERSION"
 
 # Check if already exists
 if [ -d "$RUNNER_DIR" ] && [ -f "$RUNNER_DIR/.runner" ]; then
-  echo "Runner already exists at $RUNNER_DIR"
+  warn "Runner already exists at $RUNNER_DIR"
   echo "To reconfigure, first remove: rm -rf $RUNNER_DIR"
   exit 1
 fi
@@ -66,29 +95,54 @@ if [ ! -f "./config.sh" ]; then
       RUNNER_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz"
     fi
   fi
-  curl -sL "$RUNNER_URL" | tar xz
+  if ! curl -sL "$RUNNER_URL" | tar xz; then
+    error "Failed to download runner from $RUNNER_URL"
+  fi
 fi
 
-# Get registration token
+# Get registration token (requires admin access)
 echo "Getting registration token..."
-TOKEN=$(gh api "repos/$REPO/actions/runners/registration-token" --method POST --jq '.token')
+TOKEN=$(gh api "repos/$REPO/actions/runners/registration-token" --method POST --jq '.token' 2>&1)
+
+if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"Must have admin rights"* ]] || [[ "$TOKEN" == *"Not Found"* ]]; then
+  # Clean up the directory we created
+  cd ..
+  rm -rf "$RUNNER_DIR"
+  error "Cannot get registration token. This requires admin access to $REPO.
+
+Ask a repo admin to either:
+  1. Run this script themselves, or
+  2. Give you admin access temporarily, or
+  3. Create a registration token manually:
+     Settings → Actions → Runners → New self-hosted runner"
+fi
 
 # Configure
 echo "Configuring runner..."
-./config.sh --url "https://github.com/$REPO" --token "$TOKEN" --unattended --name "$(hostname -s)-${REPO_NAME}" --labels "self-hosted,$(uname -s),$(uname -m)"
+if ! ./config.sh --url "https://github.com/$REPO" --token "$TOKEN" --unattended --name "$(hostname -s)-${REPO_NAME}" --labels "self-hosted,$(uname -s),$(uname -m)"; then
+  error "Failed to configure runner. Check the error above."
+fi
 
 # Add API key if provided
 if [ -n "$API_KEY" ]; then
   echo "ANTHROPIC_API_KEY=$API_KEY" >> .env
-  echo "Added API key to .env"
+  info "Added API key to .env"
+else
+  warn "No API key provided. Add it later:"
+  echo "  echo 'ANTHROPIC_API_KEY=sk-ant-...' >> $RUNNER_DIR/.env"
 fi
 
 # Install and start service
 echo "Installing service..."
-./svc.sh install
-./svc.sh start
+if ! ./svc.sh install; then
+  error "Failed to install service"
+fi
+
+if ! ./svc.sh start; then
+  error "Failed to start service"
+fi
 
 echo ""
-echo "✓ Runner setup complete for $REPO"
+info "Runner setup complete for $REPO"
 echo "  Directory: $RUNNER_DIR"
 echo "  Status: $(./svc.sh status 2>&1 | grep -o 'Started\|Stopped' || echo 'Unknown')"
