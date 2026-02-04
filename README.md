@@ -157,14 +157,36 @@ pr-resolver/
 
 ## GitHub Actions (Alternative)
 
-Instead of running a local webhook server, you can use GitHub Actions:
+Use GitHub Actions instead of a local webhook server. Two options:
 
-1. Copy `.github/workflows/pr-automation.yml` to your repo
+### Option A: Self-hosted Runner (Recommended)
+
+Run Claude on your local machine, triggered by GitHub:
+
+```bash
+# 1. Add self-hosted runner to your repo
+#    Go to: Settings → Actions → Runners → New self-hosted runner
+#    Follow the instructions to install and start the runner
+
+# 2. Copy workflow to your repo
+cp .github/workflows/pr-automation.yml /path/to/your-repo/.github/workflows/
+
+# 3. Comment [action] on a PR - it runs on your machine!
+```
+
+**Pros:** Uses local Claude installation, fast, no API key in GitHub
+**Cons:** Machine must be online
+
+### Option B: GitHub-hosted Runner
+
+Run Claude on GitHub's infrastructure:
+
+1. Change `runs-on: self-hosted` to `runs-on: ubuntu-latest` in the workflow
 2. Add `ANTHROPIC_API_KEY` to repository secrets (Settings → Secrets)
-3. Comment `[action]`, `[fix]`, or `[debug]` on any PR
+3. Comment `[action]` on any PR
 
-**Pros:** No local server, logs visible in GitHub UI, works from anywhere
-**Cons:** Slower startup, uses Actions minutes, less environment control
+**Pros:** No local machine needed, works from anywhere
+**Cons:** Slower (installs Claude each run), uses Actions minutes
 
 ## Troubleshooting
 
