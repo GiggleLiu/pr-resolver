@@ -103,9 +103,9 @@ jobs:
           4. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
 
           ## Rules
-          - Read existing code before modifying
-          - Only implement what is in the plan
-          - Stop and report if a step fails
+          - Tests should be strong enough to catch regressions.
+          - Do not modify tests to make them pass.
+          - Test failure must be reported.
           " 2>&1 | tee claude-output.txt
 
       - name: Fix issues
@@ -117,9 +117,10 @@ jobs:
           # Use secret if set, otherwise use runner's env
           [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
 
-          # Gather review comments
+          # Gather all feedback sources
           INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments --jq '.[].body' 2>/dev/null || echo "")
           REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews --jq '.[] | select(.body != "") | .body' 2>/dev/null || echo "")
+          PR_COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments --jq '.[].body' 2>/dev/null || echo "")
 
           # Gather CI status
           CI_STATUS=$(gh pr checks ${{ github.event.issue.number }} --repo ${{ github.repository }} 2>/dev/null || echo "")
@@ -136,9 +137,14 @@ jobs:
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Fix all issues with this PR: review comments AND CI failures.
 
-          === Review Comments ===
+          === Inline Code Comments ===
           $INLINE
+
+          === PR Reviews ===
           $REVIEWS
+
+          === PR Conversation ===
+          $PR_COMMENTS
 
           === CI Status ===
           $CI_STATUS
@@ -155,9 +161,8 @@ jobs:
           6. Post summary: gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body 'SUMMARY'
 
           ## Rules
-          - Fix ALL issues, not just some
-          - Make tests pass
-          - Fix lint/format errors
+          - All CI failures must be fixed.
+          - All change requests must be either addressed or explained.
           " 2>&1 | tee claude-output.txt
 
       - name: Debug test
