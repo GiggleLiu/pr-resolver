@@ -8,16 +8,18 @@
     <array>
         <string>/opt/homebrew/bin/cloudflared</string>
         <string>tunnel</string>
+        <string>--config</string>
+        <string>{{HOME}}/.cloudflared/config.yml</string>
         <string>run</string>
-        <string>pr-webhook</string>
+        <string>{{TUNNEL_NAME}}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/tunnel-stdout.log</string>
+    <string>{{PROJECT_DIR}}/.claude/logs/tunnel-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/jinguomini/server/pr-resolver/.claude/logs/tunnel-stderr.log</string>
+    <string>{{PROJECT_DIR}}/.claude/logs/tunnel-stderr.log</string>
 </dict>
 </plist>

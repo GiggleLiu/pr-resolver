@@ -45,10 +45,10 @@ claude -p "/pr-executor"
 crontab -e
 
 # Add (runs every 30 minutes)
-*/30 * * * * /Users/jinguomini/rcode/.claude/scripts/pr-cron.sh /Users/jinguomini/rcode
+*/30 * * * * /path/to/workspace/.claude/scripts/pr-cron.sh /path/to/workspace
 
 # Or with logging
-*/30 * * * * /Users/jinguomini/rcode/.claude/scripts/pr-cron.sh /Users/jinguomini/rcode >> /tmp/pr-cron.log 2>&1
+*/30 * * * * /path/to/workspace/.claude/scripts/pr-cron.sh /path/to/workspace >> /tmp/pr-cron.log 2>&1
 ```
 
 ## Systemd Service (Linux)
@@ -89,8 +89,8 @@ Create `~/Library/LaunchAgents/com.claude.pr-monitor.plist`:
     <string>com.claude.pr-monitor</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/jinguomini/rcode/.claude/scripts/pr-cron.sh</string>
-        <string>/Users/jinguomini/rcode</string>
+        <string>/path/to/workspace/.claude/scripts/pr-cron.sh</string>
+        <string>/path/to/workspace</string>
     </array>
     <key>StartInterval</key>
     <integer>1800</integer>
