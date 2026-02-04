@@ -85,9 +85,10 @@ jobs:
       - name: Execute plan
         if: steps.pr.outputs.command == 'action'
         env:
-          CI: ""
-          GITHUB_ACTIONS: ""
+          ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Use secret if set, otherwise use runner's env
+          [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
 
@@ -101,10 +102,11 @@ jobs:
       - name: Fix review comments
         if: steps.pr.outputs.command == 'fix'
         env:
-          CI: ""
-          GITHUB_ACTIONS: ""
+          ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Use secret if set, otherwise use runner's env
+          [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
           INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments --jq '.[].body' 2>/dev/null || echo "")
           REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews --jq '.[] | select(.body != "") | .body' 2>/dev/null || echo "")
 
