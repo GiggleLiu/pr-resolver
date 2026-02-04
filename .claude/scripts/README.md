@@ -2,7 +2,18 @@
 
 Scripts for automated PR processing with Claude Code.
 
-## Quick Start
+## Quick Start (Recommended: Webhook)
+
+```bash
+# One-time setup
+./setup-webhook.sh
+
+# Then follow the printed instructions to:
+# 1. Configure GitHub webhook
+# 2. Start the services
+```
+
+## Alternative: Polling-based (Legacy)
 
 ### One-time run (manual or cron)
 ```bash

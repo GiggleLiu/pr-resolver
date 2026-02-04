@@ -99,33 +99,43 @@ problem-reductions (standalone)
 
 ## Automation
 
-### PR Executor (`/pr-executor`)
+### PR Webhook System (Recommended)
 
-Automated PR processing across all repos. Responds to commands in PR comments:
+Event-driven PR automation using GitHub webhooks. More reliable than polling.
+
+**Setup:**
+```bash
+.claude/scripts/setup-webhook.sh
+```
+
+**Commands (as PR comments):**
 
 | Command | Action |
 |---------|--------|
-| `[action]` | Execute plan file via subagent |
-| `[fix]` | Address all review comments |
+| `[action]` | Execute plan file (PLAN.md) |
+| `[fix]` | Address review comments |
+| `[status]` | Check queue status |
 
-**Usage:**
+**Status comments (bot responses):**
+
+| Status | Meaning |
+|--------|---------|
+| `[queued]` | Job added to queue |
+| `[executing]` | Plan execution started |
+| `[done]` | Completed successfully |
+| `[failed]` | Error with details |
+| `[timeout]` | Exceeded time limit |
+
+**Architecture:** GitHub Webhook → Cloudflare Tunnel → FastAPI Server → SQLite Queue → Claude Worker
+
+See `docs/plans/2026-02-04-pr-webhook-design.md` for details.
+
+### Legacy: Polling-based Scripts
+
 ```bash
-# Interactive
-/pr-executor
-
 # One-shot (cron)
 .claude/scripts/pr-cron.sh /path/to/workspace
 
 # Daemon mode
 .claude/scripts/pr-monitor.sh --workspace . --interval 1800
-
-# Direct Claude invocation
-claude --dangerously-skip-permissions -p "/pr-executor"
 ```
-
-**Cron setup:**
-```bash
-*/30 * * * * /Users/jinguomini/rcode/.claude/scripts/pr-cron.sh /Users/jinguomini/rcode
-```
-
-See `.claude/scripts/README.md` for systemd/launchd setup.
