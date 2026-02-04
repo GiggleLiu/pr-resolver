@@ -128,8 +128,8 @@ if [ -x "$SETUP_SCRIPT" ]; then
     if "$SETUP_SCRIPT" "$REPO" "$API_KEY"; then
         info "  Runner setup complete"
     else
-        warn "  Runner setup failed - may need admin access"
-        NEEDS_ADMIN+=("Setup runner: run './setup-runner.sh $REPO' with admin access")
+        warn "  Runner setup failed - check error above"
+        NEEDS_ADMIN+=("Setup runner: fix the error above and re-run './setup-runner.sh $REPO'")
     fi
 else
     error "setup-runner.sh not found or not executable"

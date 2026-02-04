@@ -101,8 +101,12 @@ remove:
 		echo "Stopping runner $$REPO_NAME..."; \
 		(cd "$$RUNNER_DIR" && ./svc.sh stop 2>/dev/null) || true; \
 		(cd "$$RUNNER_DIR" && ./svc.sh uninstall 2>/dev/null) || true; \
+		echo "Unregistering from GitHub..."; \
+		TOKEN=$$(gh api "repos/$(REPO)/actions/runners/remove-token" --method POST --jq '.token' 2>/dev/null) && \
+		(cd "$$RUNNER_DIR" && ./config.sh remove --token "$$TOKEN" 2>/dev/null) || \
+		echo "  Note: Could not unregister from GitHub (may need to remove manually in repo settings)"; \
 		if [ "$(KEEP_DATA)" = "1" ]; then \
-			echo "Unregistered runner (kept directory: $$RUNNER_DIR)"; \
+			echo "Kept directory: $$RUNNER_DIR"; \
 			echo "To re-register: make setup REPO=$(REPO)"; \
 		else \
 			rm -rf "$$RUNNER_DIR"; \
