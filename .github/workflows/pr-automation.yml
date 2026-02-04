@@ -85,7 +85,8 @@ jobs:
       - name: Execute plan
         if: steps.pr.outputs.command == 'action'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CI: ""
+          GITHUB_ACTIONS: ""
         run: |
           claude --dangerously-skip-permissions --max-turns 100 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
@@ -100,7 +101,8 @@ jobs:
       - name: Fix review comments
         if: steps.pr.outputs.command == 'fix'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CI: ""
+          GITHUB_ACTIONS: ""
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments --jq '.[].body' 2>/dev/null || echo "")
