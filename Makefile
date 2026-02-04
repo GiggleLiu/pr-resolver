@@ -157,8 +157,8 @@ round-trip:
 	echo ""; \
 	echo "Step 4: Waiting for [action] workflow..."; \
 	PREV_RUN=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
-	for i in 1 2 3 4 5 6 7 8 9 10; do \
-		sleep 3; \
+	for i in 1 2 3 4 5 6; do \
+		sleep 10; \
 		RUN_ID=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
 		[ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ] && break; \
 		echo "  waiting for workflow to start..."; \
@@ -175,8 +175,8 @@ round-trip:
 	PREV_RUN=$$RUN_ID; \
 	echo ""; \
 	echo "Step 6: Waiting for [fix] workflow..."; \
-	for i in 1 2 3 4 5 6 7 8 9 10; do \
-		sleep 3; \
+	for i in 1 2 3 4 5 6; do \
+		sleep 10; \
 		RUN_ID=$$(gh run list --workflow=pr-automation.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null); \
 		[ -n "$$RUN_ID" ] && [ "$$RUN_ID" != "$$PREV_RUN" ] && break; \
 		echo "  waiting for workflow to start..."; \
