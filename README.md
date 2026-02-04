@@ -159,44 +159,99 @@ pr-resolver/
 
 Use GitHub Actions for simpler setup - no webhook server or tunnel needed.
 
-### Setup
+### First-Time Setup
 
-1. **Copy workflow to your repo:**
-   ```bash
-   mkdir -p .github/workflows
-   cp /path/to/pr-resolver/.github/workflows/pr-automation.yml .github/workflows/
-   git add .github/workflows && git commit -m "Add PR automation workflow" && git push
-   ```
-
-2. **Configure runner** (choose one):
-
-   | Runner | Setup | API Key |
-   |--------|-------|---------|
-   | **Self-hosted** | [Add runner](https://docs.github.com/en/actions/hosting-your-own-runners) to your repo | Set in `~/actions-runner/.env` |
-   | **GitHub-hosted** | Change `runs-on: self-hosted` to `runs-on: ubuntu-latest` | Set in repo secrets |
-
-3. **Comment `[action]` on any PR** - workflow triggers automatically
-
-### Self-hosted Runner Setup (macOS)
+#### Step 1: Add workflow to your repo
 
 ```bash
-# Download and configure
-mkdir -p ~/actions-runner && cd ~/actions-runner
-curl -O -L https://github.com/actions/runner/releases/download/v2.321.0/actions-runner-osx-arm64-2.321.0.tar.gz
-tar xzf actions-runner-osx-arm64-2.321.0.tar.gz
-./config.sh --url https://github.com/OWNER/REPO --token YOUR_TOKEN
+# Copy the workflow file
+mkdir -p your-repo/.github/workflows
+cp pr-resolver/.github/workflows/pr-automation.yml your-repo/.github/workflows/
 
-# Add API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
-
-# Install and start as service
-./svc.sh install && ./svc.sh start
+# Commit and push
+cd your-repo
+git add .github/workflows && git commit -m "Add PR automation workflow" && git push
 ```
 
-### GitHub-hosted Runner Setup
+#### Step 2: Setup a self-hosted runner
+
+Each repo needs its own runner. Use the provided setup script:
+
+```bash
+# Configure (edit runner-config.toml to add your repos)
+cd pr-resolver/.claude
+vi runner-config.toml
+
+# Setup runner for a single repo
+export ANTHROPIC_API_KEY="sk-ant-..."
+./setup-runner.sh owner/repo
+
+# Or setup all repos in config
+make setup-all ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Get your Anthropic API key:** https://console.anthropic.com/
+
+**Get runner registration token:**
+1. Go to your repo → Settings → Actions → Runners → New self-hosted runner
+2. Copy the token from the configuration command
+
+#### Step 3: Test the setup
+
+```bash
+# Check runner status
+cd pr-resolver/.claude
+make status
+
+# Create a test PR with a plan file, then comment:
+# [debug]   - Test the pipeline
+# [action]  - Execute the plan
+```
+
+### Runner Management
+
+All runners are stored in `~/actions-runners/`:
+
+```bash
+cd pr-resolver/.claude
+
+make status                  # Show all runner status
+make start                   # Start all runners
+make stop                    # Stop all runners
+make restart                 # Restart all runners
+make setup REPO=owner/repo   # Add new runner
+make remove REPO=owner/repo  # Remove a runner
+make list                    # List configured repos
+```
+
+### Configuration File
+
+Edit `.claude/runner-config.toml`:
+
+```toml
+[runner]
+base_dir = "~/actions-runners"
+runner_version = "2.321.0"
+
+[[repos]]
+repo = "owner/repo1"
+
+[[repos]]
+repo = "owner/repo2"
+```
+
+### Alternative: GitHub-hosted Runner
+
+If you prefer not to run a local runner:
 
 1. Edit workflow: change `runs-on: self-hosted` to `runs-on: ubuntu-latest`
 2. Add secret: Settings → Secrets → Actions → `ANTHROPIC_API_KEY`
+
+**Trade-offs:**
+- ✓ No local machine needed
+- ✗ Slower (installs Claude CLI each run)
+- ✗ Uses GitHub Actions minutes
+- ✗ Requires API key in GitHub secrets
 
 ### Status Checks
 

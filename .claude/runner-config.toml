@@ -1,0 +1,29 @@
+# GitHub Actions Runner Configuration
+[runner]
+base_dir = "~/actions-runners"
+runner_version = "2.321.0"
+
+# Repos to manage (one runner per repo)
+[[repos]]
+repo = "GiggleLiu/pr-resolver"
+
+[[repos]]
+repo = "GiggleLiu/yao-rs"
+
+[[repos]]
+repo = "GiggleLiu/tn-mcp-rs"
+
+[[repos]]
+repo = "GiggleLiu/omeco"
+
+[[repos]]
+repo = "CodingThrust/dyad"
+
+[[repos]]
+repo = "CodingThrust/problem-reductions"
+
+[[repos]]
+repo = "TensorBFS/omeinsum-rs"
+
+[[repos]]
+repo = "TensorBFS/tropical-gemm"
