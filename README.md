@@ -48,6 +48,7 @@ The workflow needs a GitHub Actions runner. Choose one:
 | **GitHub-hosted** | Occasional use, no local setup | 2 min |
 
 #### Self-hosted (recommended)
+Just add `RUNNER_TYPE` to repo variables (Settings → Secretes and Variables → Actions → Variables → New repository variable).
 
 ```bash
 # Clone this repo
