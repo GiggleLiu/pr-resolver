@@ -14,15 +14,14 @@ GitHub Action runner that **uses Claude superpowers to implement your plans.** W
  You                                    Claude
   │                                       │
   │  1. Write plan (docs/plans/*.md)      │
-  │  2. Open PR                           │
-  │  3. Comment [action] ──────────────►  │
-  │                                       │  4. Read plan
-  │                                       │  5. Implement
-  │                                       │  6. Commit & push
-  │  7. Review changes  ◄──────────────   │
-  │  8. Comment [fix] ─────────────────►  │
-  │                                       │  9. Address feedback
-  │  10. Merge ✓                          │
+  │  2. Open PR with [action] in body ──► │
+  │     (or comment [action] later)       │  3. Read plan
+  │                                       │  4. Implement
+  │                                       │  5. Commit & push
+  │  6. Review changes  ◄──────────────   │
+  │  7. Comment [fix] ─────────────────►  │
+  │                                       │  8. Address feedback
+  │  9. Merge ✓                           │
 ```
 
 **That's it.** No context switching. No copy-pasting. Just review and merge.
@@ -82,19 +81,20 @@ No other setup needed — the workflow defaults to GitHub-hosted runners.
    1. Create a file `hello.txt` with content "Hello from Claude"
    2. Commit with message "Add hello.txt"
    ```
-2. Open a PR with this file
-3. Comment `[action]`
-4. Watch Claude work (check the Actions tab)
+2. Open a PR with `[action]` in the description (or comment `[action]` after)
+3. Watch Claude work (check the Actions tab)
 
 ## Commands
-
-Comment these on any PR:
 
 | Command | What happens |
 |---------|--------------|
 | `[action]` | Execute the plan file |
 | `[fix]` | Address review comments AND fix CI failures |
 | `[debug]` | Test the pipeline (creates a test comment) |
+
+**Two ways to trigger:**
+- **PR body**: Include command anywhere when creating the PR
+- **Comment**: Post a comment that starts with the command
 
 ## Plan Files
 
@@ -141,21 +141,24 @@ make round-trip              # End-to-end test
 ## How It Works
 
 ```
-GitHub PR Comment
+PR Created / Comment Posted
        │
        ▼
-GitHub Actions ──► Self-hosted Runner ──► Claude CLI
-       │                                      │
-       │                                      ▼
-       │                              Read plan, implement,
-       │                              commit, push
-       │                                      │
-       └──── Status Check (✓/✗) ◄─────────────┘
+Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
+       │
+       ▼
+Execute Job ──► Self-hosted Runner ──► Claude CLI
+       │                                    │
+       │                                    ▼
+       │                            Read plan, implement,
+       │                            commit, push
+       │                                    │
+       └──── Status Check (✓/✗) ◄───────────┘
 ```
 
-1. You comment `[action]` on a PR
-2. GitHub triggers the workflow
-3. Runner executes Claude with the plan
+1. You create a PR with `[action]` in body (or comment `[action]`)
+2. Setup job runs immediately on GitHub-hosted runner, sets pending status
+3. Execute job waits for your runner, updates status to "Running..."
 4. Claude reads plan, writes code, commits, pushes
 5. Workflow reports success/failure as PR status check
 
@@ -183,7 +186,15 @@ make restart
 ### Workflow not triggering
 - Ensure workflow file is on the **default branch** (usually `main`)
 - Check Actions tab for any errors
-- Verify your comment starts with `[action]` (case-sensitive)
+- For comments: must start with `[action]` (case-sensitive)
+- For PR body: `[action]` can be anywhere in the text
+
+### Status stuck on "Waiting for runner..."
+Your self-hosted runner isn't picking up the job:
+```bash
+make status   # Check runner status
+make start    # Start runners if offline
+```
 
 ## License
 

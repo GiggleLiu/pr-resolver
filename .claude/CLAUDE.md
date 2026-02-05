@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PR Automation system - comment `[action]` or `[fix]` on GitHub PRs to trigger Claude Code to execute plans or address review feedback. Uses GitHub Actions with self-hosted runners.
+PR Automation system - include `[action]` or `[fix]` in PR body or comments to trigger Claude Code to execute plans or address review feedback. Uses GitHub Actions with self-hosted runners.
 
 ## Commands
 
@@ -24,30 +24,34 @@ make round-trip                          # End-to-end test
 ## Architecture
 
 ```
-GitHub PR Comment
+PR Created / Comment Posted
        │
        ▼
-GitHub Actions ──► Self-hosted Runner ──► Claude CLI
-       │                                      │
-       │                                      ▼
-       │                              Read plan, implement,
-       │                              commit, push
-       │                                      │
-       └──── Status Check (✓/✗) ◄─────────────┘
+Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
+       │
+       ▼
+Execute Job ──► Self-hosted Runner ──► Claude CLI
+       │                                    │
+       │                                    ▼
+       │                            Read plan, implement,
+       │                            commit, push
+       │                                    │
+       └──── Status Check (✓/✗) ◄───────────┘
 ```
 
 **Flow:**
-1. User comments `[action]` on PR → GitHub triggers workflow
-2. Workflow checks out PR branch, finds plan file
-3. Runs `claude --dangerously-skip-permissions` to execute plan
-4. Claude commits, pushes, and posts summary comment
-5. Workflow reports success/failure via commit status API
+1. User creates PR with `[action]` in body OR comments `[action]` → GitHub triggers workflow
+2. Setup job (always runs on GitHub-hosted) sets pending status immediately
+3. Execute job waits for runner, checks out PR branch, finds plan file
+4. Runs `claude --dangerously-skip-permissions` to execute plan
+5. Claude commits, pushes, and posts summary comment
+6. Workflow reports success/failure via commit status API
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/pr-automation.yml` | Workflow triggered by PR comments |
+| `.github/workflows/pr-automation.yml` | Workflow triggered by PR creation/comments |
 | `runner-config.toml` | Source of truth for managed repos |
 | `Makefile` | Runner management commands |
 | `add-repo.sh` | Setup script (called by make update) |
@@ -68,7 +72,8 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 ## Status Reporting
 
 Status is shown directly in the PR's status checks (not comments):
-- **Pending**: Workflow is running
+- **Pending (Waiting for runner...)**: Setup complete, waiting for runner to pick up job
+- **Pending (Running...)**: Runner picked up job, Claude is executing
 - **Success**: Plan executed successfully
 - **Failure**: Error occurred (check Actions log)
 
@@ -107,10 +112,18 @@ The workflow uses `runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}`:
 
 ## Development
 
-The workflow (`pr-automation.yml`) has three main steps:
+The workflow (`pr-automation.yml`) has two jobs:
 
-1. **Get PR details**: Extracts branch name, SHA, and command type
-2. **Execute plan / Fix comments**: Runs Claude with appropriate prompt
-3. **Set status**: Reports success/failure via commit status API
+**Setup job** (runs on GitHub-hosted `ubuntu-latest`):
+1. Extracts PR details (branch, SHA, command, instructions)
+2. Sets pending status with "Waiting for runner..."
+3. Outputs values for execute job
+
+**Execute job** (runs on configured runner, depends on setup):
+1. Updates status to "Running..."
+2. Checks out PR branch, finds plan file
+3. Validates API key, runs Claude with appropriate prompt
+4. Checks output for authentication errors
+5. Sets success/failure status
 
 Claude is invoked with `--dangerously-skip-permissions` and `--max-turns 100` to allow autonomous execution within the sandboxed runner environment.
