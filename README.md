@@ -123,6 +123,8 @@ Claude will ask clarifying questions, explore approaches, and write a detailed p
 
 This fetches the issue, brainstorms solutions with you, writes a plan, and creates a PR with `[action]` to auto-trigger execution.
 
+> **Note:** Copy `.claude/skills/issue-to-pr.md` from this repo to your target repo's `.claude/skills/` directory to enable this skill.
+
 ## Managing Multiple Repos
 
 Edit `runner-config.toml` and run `make update`:
