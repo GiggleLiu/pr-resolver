@@ -115,6 +115,14 @@ Plans are detected in this order:
 
 Claude will ask clarifying questions, explore approaches, and write a detailed plan to `docs/plans/`. This is the recommended way to create plans.
 
+**Start from a GitHub issue:** Use `/issue-to-pr` to convert an issue directly into a PR:
+
+```
+/issue-to-pr 42
+```
+
+This fetches the issue, brainstorms solutions with you, writes a plan, and creates a PR with `[action]` to auto-trigger execution.
+
 ## Managing Multiple Repos
 
 Edit `runner-config.toml` and run `make update`:
