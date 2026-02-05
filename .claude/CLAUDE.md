@@ -61,6 +61,10 @@ GitHub Actions ──► Self-hosted Runner ──► Claude CLI
 | `[fix]` | Fix review comments AND CI failures |
 | `[debug]` | Test workflow pipeline (creates test comment) |
 
+**Trigger methods:**
+- **PR creation**: Include command anywhere in the PR body
+- **Comment**: Post a comment that starts with the command
+
 ## Status Reporting
 
 Status is shown directly in the PR's status checks (not comments):
