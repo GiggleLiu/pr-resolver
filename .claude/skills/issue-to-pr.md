@@ -19,14 +19,14 @@ Convert a GitHub issue into an actionable PR with a plan that auto-triggers Clau
 digraph issue_to_pr {
     "Receive issue number" [shape=box];
     "Fetch issue with gh" [shape=box];
-    "Invoke /brainstorming" [shape=box];
+    "Brainstorm with user" [shape=box];
     "Write plan file" [shape=box];
     "Create branch and PR" [shape=box];
     "PR triggers [action]" [shape=doublecircle];
 
     "Receive issue number" -> "Fetch issue with gh";
-    "Fetch issue with gh" -> "Invoke /brainstorming";
-    "Invoke /brainstorming" -> "Write plan file";
+    "Fetch issue with gh" -> "Brainstorm with user";
+    "Brainstorm with user" -> "Write plan file";
     "Write plan file" -> "Create branch and PR";
     "Create branch and PR" -> "PR triggers [action]";
 }
@@ -51,7 +51,7 @@ Present issue summary to user.
 
 ### 3. Brainstorm Solutions
 
-**REQUIRED:** Invoke `/brainstorming` skill with the issue context.
+**REQUIRED:** Invoke `superpowers:brainstorming` skill with the issue context (if superpowers plugin is available). Otherwise, conduct a manual brainstorming discussion with the user.
 
 This ensures:
 - User intent is clarified
@@ -119,7 +119,7 @@ Claude: Let me fetch issue #42...
 
 [Fetches issue: "Add dark mode support"]
 
-I'll use /brainstorming to explore this with you.
+I'll use superpowers:brainstorming to explore this with you.
 
 [Invokes brainstorming - discusses approaches, user preferences, scope]
 
@@ -137,7 +137,7 @@ The [action] trigger will automatically execute the plan.
 
 | Mistake | Fix |
 |---------|-----|
-| Skipping brainstorming | Always invoke /brainstorming first |
+| Skipping brainstorming | Always use superpowers:brainstorming (or manual discussion) first |
 | `[action]` not at start | PR body must BEGIN with `[action]` |
 | Including code in PR | Only commit the plan file |
 | Generic plan | Use specifics from brainstorming |
