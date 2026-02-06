@@ -62,8 +62,15 @@ make init-claude
 # Sync runners (sets up workflow, runner, and config)
 make update
 
-# Set API key for all runners
+# Authentication (choose one):
+
+# Option A: API key (pay per use)
 make setup-key KEY=sk-ant-...
+
+# Option B: OAuth with Max/Pro subscription (recommended)
+claude              # Login interactively first
+make setup-oauth    # Extract token from keychain
+
 make restart
 ```
 
@@ -140,12 +147,14 @@ repos = [
 ```
 
 ```bash
-make update                  # Sync: add missing runners, remove unlisted
-make status                  # Check all runner statuses
-make start / stop / restart  # Control runners
+make update                    # Sync: add missing runners, remove unlisted
+make status                    # Check all runner statuses
+make start / stop / restart    # Control runners
 make setup-key KEY=sk-ant-...  # Set API key for all runners
-make init-claude             # Install Claude CLI + superpowers
-make round-trip              # End-to-end test
+make setup-oauth               # Set OAuth token from keychain (Max/Pro)
+make sync-workflow             # Install workflow to all repos
+make init-claude               # Install Claude CLI + superpowers
+make round-trip                # End-to-end test
 ```
 
 ## How It Works
@@ -174,7 +183,9 @@ Execute Job ──► Self-hosted Runner ──► Claude CLI
 
 ## Requirements
 
-- [Anthropic API key](https://console.anthropic.com/) (for Claude)
+- **Authentication** (choose one):
+  - [Anthropic API key](https://console.anthropic.com/) - pay per use
+  - Claude Max/Pro subscription - use `make setup-oauth` (macOS only, requires `jq`)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
 - macOS, Linux, or Windows with bash
 
@@ -186,10 +197,15 @@ make status   # Check all runners
 make start    # Start all runners
 ```
 
-### "Invalid API key" error
+### "Invalid API key" or "Invalid bearer token" error
 ```bash
-# Set API key for all runners at once
+# Option A: Set API key for all runners
 make setup-key KEY=sk-ant-...
+make restart
+
+# Option B: Use OAuth with Max/Pro subscription (macOS)
+claude              # Login interactively first
+make setup-oauth    # Extract token from keychain
 make restart
 ```
 

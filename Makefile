@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key setup-oauth sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -25,6 +25,8 @@ help:
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
+	@echo "  make setup-oauth             # Set OAuth token from keychain (Max/Pro subscription)"
+	@echo "  make sync-workflow           # Install workflow to all repos"
 	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
 	@echo "Config: $(CONFIG_FILE)"
@@ -130,6 +132,52 @@ setup-key:
 		fi; \
 	done
 	@echo "Done. Run 'make restart' to apply."
+
+setup-oauth:
+	@echo "Extracting OAuth token from macOS Keychain..."
+	@TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null); \
+	if [ -z "$$TOKEN_JSON" ]; then \
+		echo "Error: No OAuth credentials found in keychain."; \
+		echo "Run 'claude' interactively first to authenticate with your Max/Pro account."; \
+		exit 1; \
+	fi; \
+	ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+	if [ -z "$$ACCESS_TOKEN" ] || [ "$$ACCESS_TOKEN" = "null" ]; then \
+		echo "Error: Could not extract access token from credentials."; \
+		exit 1; \
+	fi; \
+	echo "Token extracted (length: $${#ACCESS_TOKEN})"; \
+	for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/.runner" ]; then \
+			name=$$(basename "$$dir"); \
+			grep -v "CLAUDE_CODE_OAUTH_TOKEN" "$$dir/.env" > "$$dir/.env.tmp" 2>/dev/null || true; \
+			mv "$$dir/.env.tmp" "$$dir/.env"; \
+			echo "CLAUDE_CODE_OAUTH_TOKEN=$$ACCESS_TOKEN" >> "$$dir/.env"; \
+			echo "  [set] $$name"; \
+		fi; \
+	done; \
+	echo "Done. Run 'make restart' to apply."
+
+sync-workflow:
+	@echo "Syncing workflow to all repos..."
+	@WORKFLOW_CONTENT=$$(cat .github/workflows/pr-automation.yml | base64); \
+	for repo in $(REPOS); do \
+		echo "  $$repo..."; \
+		SHA=$$(gh api repos/$$repo/contents/.github/workflows/pr-automation.yml --jq '.sha' 2>/dev/null || echo ""); \
+		if [ -n "$$SHA" ]; then \
+			gh api -X PUT repos/$$repo/contents/.github/workflows/pr-automation.yml \
+				-f message="Update PR automation workflow" \
+				-f content="$$WORKFLOW_CONTENT" \
+				-f sha="$$SHA" \
+				--silent 2>/dev/null && echo "    [updated]" || echo "    [failed]"; \
+		else \
+			gh api -X PUT repos/$$repo/contents/.github/workflows/pr-automation.yml \
+				-f message="Add PR automation workflow" \
+				-f content="$$WORKFLOW_CONTENT" \
+				--silent 2>/dev/null && echo "    [created]" || echo "    [failed]"; \
+		fi; \
+	done
+	@echo "Done."
 
 init-claude:
 	@echo "Checking Claude CLI and superpowers setup..."
