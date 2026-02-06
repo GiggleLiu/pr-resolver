@@ -170,12 +170,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
-          # Use secret if set, otherwise use runner's env
+          # Use secret if set, otherwise use runner's env (or OAuth from keychain)
           [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
 
-          # Check API key is available
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "Error: ANTHROPIC_API_KEY not set" | tee claude-output.txt
+          # For GitHub-hosted runners, API key is required
+          # For self-hosted runners, OAuth from keychain is also supported
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ "${{ vars.RUNNER_TYPE }}" != "self-hosted" ]; then
+            echo "Error: ANTHROPIC_API_KEY not set (required for GitHub-hosted runners)" | tee claude-output.txt
             exit 1
           fi
 
@@ -217,12 +218,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
-          # Use secret if set, otherwise use runner's env
+          # Use secret if set, otherwise use runner's env (or OAuth from keychain)
           [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
 
-          # Check API key is available
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "Error: ANTHROPIC_API_KEY not set" | tee claude-output.txt
+          # For GitHub-hosted runners, API key is required
+          # For self-hosted runners, OAuth from keychain is also supported
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ "${{ vars.RUNNER_TYPE }}" != "self-hosted" ]; then
+            echo "Error: ANTHROPIC_API_KEY not set (required for GitHub-hosted runners)" | tee claude-output.txt
             exit 1
           fi
 
