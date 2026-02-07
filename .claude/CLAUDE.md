@@ -18,6 +18,10 @@ make list                                # List configured repos
 make clean                               # Clean caches (saves ~3GB)
 make init-claude                         # Install Claude CLI + superpowers
 make setup-key KEY=sk-ant-...            # Set API key for all runners
+make setup-oauth                         # Set OAuth token (Max/Pro subscription)
+make install-refresh                     # Auto-refresh OAuth every 6h (cron)
+make refresh-oauth                       # Manually refresh OAuth token
+make sync-workflow                       # Install workflow to all repos
 make round-trip                          # End-to-end test
 ```
 
@@ -89,8 +93,17 @@ After execution, Claude posts a summary comment describing what was done.
 # 2. Sync runners
 make update
 
-# 3. Set API key for all runners
+# 3. Authentication (choose one):
+
+# Option A: API key (pay per use, never expires)
 make setup-key KEY=sk-ant-...
+
+# Option B: OAuth with Max/Pro subscription (no API key needed)
+claude               # Login interactively first
+make setup-oauth     # Extract token from keychain
+make install-refresh # Auto-refresh every 6 hours via cron
+
+# 4. Restart runners
 make restart
 ```
 

@@ -67,10 +67,10 @@ make update
 # Option A: API key (pay per use)
 make setup-key KEY=sk-ant-...
 
-# Option B: OAuth with Max/Pro subscription (recommended)
+# Option B: OAuth with Max/Pro subscription (no API key needed)
 claude              # Login interactively first
 make setup-oauth    # Extract token from keychain
-
+make install-refresh # Auto-refresh token every 6 hours (via cron)
 make restart
 ```
 
@@ -152,6 +152,7 @@ make status                    # Check all runner statuses
 make start / stop / restart    # Control runners
 make setup-key KEY=sk-ant-...  # Set API key for all runners
 make setup-oauth               # Set OAuth token from keychain (Max/Pro)
+make install-refresh           # Auto-refresh OAuth every 6 hours (cron)
 make sync-workflow             # Install workflow to all repos
 make init-claude               # Install Claude CLI + superpowers
 make round-trip                # End-to-end test
@@ -184,10 +185,10 @@ Execute Job ──► Self-hosted Runner ──► Claude CLI
 ## Requirements
 
 - **Authentication** (choose one):
-  - [Anthropic API key](https://console.anthropic.com/) - pay per use
-  - Claude Max/Pro subscription - use `make setup-oauth` (macOS only, requires `jq`)
+  - [Anthropic API key](https://console.anthropic.com/) - pay per use, never expires
+  - Claude Max/Pro subscription - use `make setup-oauth` (requires `jq`, token expires every ~8h)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
-- macOS, Linux, or Windows with bash
+- macOS or Linux (cron required for OAuth auto-refresh)
 
 ## Troubleshooting
 
@@ -203,10 +204,18 @@ make start    # Start all runners
 make setup-key KEY=sk-ant-...
 make restart
 
-# Option B: Use OAuth with Max/Pro subscription (macOS)
-claude              # Login interactively first
-make setup-oauth    # Extract token from keychain
+# Option B: Use OAuth with Max/Pro subscription
+claude               # Login interactively first
+make setup-oauth     # Extract token from keychain
+make install-refresh # Auto-refresh every 6 hours
 make restart
+```
+
+### OAuth token expired
+```bash
+make refresh-oauth   # Manually refresh token and restart runners
+# Or ensure auto-refresh is installed:
+crontab -l | grep pr-resolver  # Should show cron entry
 ```
 
 ### Workflow not triggering
