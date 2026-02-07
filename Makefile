@@ -175,37 +175,13 @@ refresh-oauth: setup-oauth restart
 	@echo "OAuth token refreshed and runners restarted."
 
 install-refresh:
-	@echo "Installing OAuth auto-refresh (every 6 hours)..."
-	@case "$$(uname)" in \
-		Darwin) \
-			cat > ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist << 'PLIST' ; \
-<?xml version="1.0" encoding="UTF-8"?> \
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"> \
-<plist version="1.0"><dict> \
-<key>Label</key><string>com.pr-resolver.oauth-refresh</string> \
-<key>ProgramArguments</key><array><string>/usr/bin/make</string><string>-C</string><string>$(CURDIR)</string><string>refresh-oauth</string></array> \
-<key>StartInterval</key><integer>21600</integer> \
-<key>RunAtLoad</key><true/> \
-</dict></plist> \
-PLIST \
-			launchctl load ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist 2>/dev/null; \
-			echo "Installed: macOS LaunchAgent" ;; \
-		Linux) \
-			(crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth"; echo "0 */6 * * * cd $(CURDIR) && make refresh-oauth") | crontab -; \
-			echo "Installed: cron job" ;; \
-		*) \
-			echo "Unsupported platform. Add manually:"; \
-			echo "  Every 6 hours: cd $(CURDIR) && make refresh-oauth" ;; \
-	esac
+	@echo "Installing OAuth auto-refresh (every 6 hours via cron)..."
+	@(crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth"; \
+		echo "0 */6 * * * cd $(CURDIR) && make refresh-oauth >> /tmp/oauth-refresh.log 2>&1") | crontab -
+	@echo "Done. Check with: crontab -l"
 
 uninstall-refresh:
-	@case "$$(uname)" in \
-		Darwin) \
-			launchctl unload ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist 2>/dev/null || true; \
-			rm -f ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist ;; \
-		Linux) \
-			crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth" | crontab - ;; \
-	esac
+	@crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth" | crontab -
 	@echo "OAuth auto-refresh removed."
 
 sync-workflow:
