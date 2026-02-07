@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key setup-oauth sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key setup-oauth refresh-oauth sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -26,6 +26,7 @@ help:
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
 	@echo "  make setup-oauth             # Set OAuth token from keychain (Max/Pro subscription)"
+	@echo "  make refresh-oauth           # Refresh OAuth token and restart runners"
 	@echo "  make sync-workflow           # Install workflow to all repos"
 	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
@@ -146,7 +147,9 @@ setup-oauth:
 		echo "Error: Could not extract access token from credentials."; \
 		exit 1; \
 	fi; \
-	echo "Token extracted (length: $${#ACCESS_TOKEN})"; \
+	EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
+	EXPIRES_DATE=$$(date -r $$((EXPIRES_MS / 1000)) "+%Y-%m-%d %H:%M"); \
+	echo "Token extracted (expires: $$EXPIRES_DATE)"; \
 	for dir in $(BASE_DIR)/*/; do \
 		if [ -f "$$dir/.runner" ]; then \
 			name=$$(basename "$$dir"); \
@@ -156,7 +159,14 @@ setup-oauth:
 			echo "  [set] $$name"; \
 		fi; \
 	done; \
-	echo "Done. Run 'make restart' to apply."
+	echo "Done. Run 'make restart' to apply."; \
+	echo ""; \
+	echo "NOTE: Token expires in ~8 hours. Set up auto-refresh:"; \
+	echo "  crontab -e"; \
+	echo "  0 */6 * * * cd $(CURDIR) && make setup-oauth && make restart"
+
+refresh-oauth: setup-oauth restart
+	@echo "OAuth token refreshed and runners restarted."
 
 sync-workflow:
 	@echo "Syncing workflow to all repos..."
