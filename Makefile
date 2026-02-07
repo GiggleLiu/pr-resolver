@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key setup-oauth refresh-oauth sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key setup-oauth refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -25,8 +25,8 @@ help:
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
-	@echo "  make setup-oauth             # Set OAuth token from keychain (Max/Pro subscription)"
-	@echo "  make refresh-oauth           # Refresh OAuth token and restart runners"
+	@echo "  make setup-oauth             # Set OAuth token from keychain (Max/Pro)"
+	@echo "  make install-refresh         # Auto-refresh OAuth every 6 hours"
 	@echo "  make sync-workflow           # Install workflow to all repos"
 	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
@@ -135,20 +135,28 @@ setup-key:
 	@echo "Done. Run 'make restart' to apply."
 
 setup-oauth:
-	@echo "Extracting OAuth token from macOS Keychain..."
-	@TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null); \
+	@echo "Extracting OAuth token..."
+	@TOKEN_JSON=""; \
+	case "$$(uname)" in \
+		Darwin) TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null) ;; \
+		Linux) [ -f ~/.claude/.credentials.json ] && TOKEN_JSON=$$(cat ~/.claude/.credentials.json) ;; \
+	esac; \
 	if [ -z "$$TOKEN_JSON" ]; then \
-		echo "Error: No OAuth credentials found in keychain."; \
-		echo "Run 'claude' interactively first to authenticate with your Max/Pro account."; \
+		echo "Error: No OAuth credentials found."; \
+		echo "Run 'claude' interactively first to authenticate."; \
 		exit 1; \
 	fi; \
 	ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
 	if [ -z "$$ACCESS_TOKEN" ] || [ "$$ACCESS_TOKEN" = "null" ]; then \
-		echo "Error: Could not extract access token from credentials."; \
+		echo "Error: Could not extract access token."; \
 		exit 1; \
 	fi; \
 	EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
-	EXPIRES_DATE=$$(date -r $$((EXPIRES_MS / 1000)) "+%Y-%m-%d %H:%M"); \
+	if [ "$$(uname)" = "Darwin" ]; then \
+		EXPIRES_DATE=$$(date -r $$((EXPIRES_MS / 1000)) "+%Y-%m-%d %H:%M"); \
+	else \
+		EXPIRES_DATE=$$(date -d "@$$((EXPIRES_MS / 1000))" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "unknown"); \
+	fi; \
 	echo "Token extracted (expires: $$EXPIRES_DATE)"; \
 	for dir in $(BASE_DIR)/*/; do \
 		if [ -f "$$dir/.runner" ]; then \
@@ -161,12 +169,44 @@ setup-oauth:
 	done; \
 	echo "Done. Run 'make restart' to apply."; \
 	echo ""; \
-	echo "NOTE: Token expires in ~8 hours. Set up auto-refresh:"; \
-	echo "  crontab -e"; \
-	echo "  0 */6 * * * cd $(CURDIR) && make setup-oauth && make restart"
+	echo "NOTE: Token expires in ~8 hours. Run 'make install-refresh' for auto-refresh."
 
 refresh-oauth: setup-oauth restart
 	@echo "OAuth token refreshed and runners restarted."
+
+install-refresh:
+	@echo "Installing OAuth auto-refresh (every 6 hours)..."
+	@case "$$(uname)" in \
+		Darwin) \
+			cat > ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist << 'PLIST' ; \
+<?xml version="1.0" encoding="UTF-8"?> \
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"> \
+<plist version="1.0"><dict> \
+<key>Label</key><string>com.pr-resolver.oauth-refresh</string> \
+<key>ProgramArguments</key><array><string>/usr/bin/make</string><string>-C</string><string>$(CURDIR)</string><string>refresh-oauth</string></array> \
+<key>StartInterval</key><integer>21600</integer> \
+<key>RunAtLoad</key><true/> \
+</dict></plist> \
+PLIST \
+			launchctl load ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist 2>/dev/null; \
+			echo "Installed: macOS LaunchAgent" ;; \
+		Linux) \
+			(crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth"; echo "0 */6 * * * cd $(CURDIR) && make refresh-oauth") | crontab -; \
+			echo "Installed: cron job" ;; \
+		*) \
+			echo "Unsupported platform. Add manually:"; \
+			echo "  Every 6 hours: cd $(CURDIR) && make refresh-oauth" ;; \
+	esac
+
+uninstall-refresh:
+	@case "$$(uname)" in \
+		Darwin) \
+			launchctl unload ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist 2>/dev/null || true; \
+			rm -f ~/Library/LaunchAgents/com.pr-resolver.oauth-refresh.plist ;; \
+		Linux) \
+			crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth" | crontab - ;; \
+	esac
+	@echo "OAuth auto-refresh removed."
 
 sync-workflow:
 	@echo "Syncing workflow to all repos..."
