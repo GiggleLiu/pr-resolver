@@ -215,11 +215,11 @@ init-claude:
 		npm install -g @anthropic-ai/claude-code; \
 	fi
 	@echo ""
-	@if claude plugins list 2>/dev/null | grep -q superpowers; then \
+	@if claude plugin list 2>/dev/null | grep -q superpowers; then \
 		echo "Superpowers: installed"; \
 	else \
 		echo "Superpowers: not found, installing..."; \
-		claude plugins add anthropics/claude-code-superpowers --yes; \
+		claude plugin install anthropics/claude-code-superpowers; \
 	fi
 	@echo ""
 	@echo "Done."
