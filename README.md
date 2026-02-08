@@ -70,7 +70,7 @@ make setup-key KEY=sk-ant-...
 # Option B: OAuth with Max/Pro subscription (no API key needed)
 claude              # Login interactively first
 make setup-oauth    # Extract token from keychain
-make install-refresh # Auto-refresh token every 6 hours (via cron)
+make install-refresh # Auto-refresh token every 6 hours (launchd on macOS, cron on Linux)
 make restart
 ```
 
@@ -152,7 +152,7 @@ make status                    # Check all runner statuses
 make start / stop / restart    # Control runners
 make setup-key KEY=sk-ant-...  # Set API key for all runners
 make setup-oauth               # Set OAuth token from keychain (Max/Pro)
-make install-refresh           # Auto-refresh OAuth every 6 hours (cron)
+make install-refresh           # Auto-refresh OAuth every 6h (launchd/cron)
 make sync-workflow             # Install workflow to all repos
 make init-claude               # Install Claude CLI + superpowers
 make round-trip                # End-to-end test
@@ -188,7 +188,7 @@ Execute Job ──► Self-hosted Runner ──► Claude CLI
   - [Anthropic API key](https://console.anthropic.com/) - pay per use, never expires
   - Claude Max/Pro subscription - use `make setup-oauth` (requires `jq`, token expires every ~8h)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
-- macOS or Linux (cron required for OAuth auto-refresh)
+- macOS or Linux (launchd on macOS, cron on Linux for OAuth auto-refresh)
 
 ## Troubleshooting
 
@@ -215,7 +215,8 @@ make restart
 ```bash
 make refresh-oauth   # Manually refresh token and restart runners
 # Or ensure auto-refresh is installed:
-crontab -l | grep pr-resolver  # Should show cron entry
+# macOS: launchctl list | grep pr-resolver
+# Linux: crontab -l | grep pr-resolver
 ```
 
 ### Workflow not triggering

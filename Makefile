@@ -174,15 +174,51 @@ setup-oauth:
 refresh-oauth: setup-oauth restart
 	@echo "OAuth token refreshed and runners restarted."
 
+LAUNCHAGENT_LABEL := com.pr-resolver.oauth-refresh
+LAUNCHAGENT_PLIST := $(HOME)/Library/LaunchAgents/$(LAUNCHAGENT_LABEL).plist
+
 install-refresh:
-	@echo "Installing OAuth auto-refresh (every 6 hours via cron)..."
-	@(crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth"; \
-		echo "0 */6 * * * cd $(CURDIR) && make refresh-oauth >> /tmp/oauth-refresh.log 2>&1") | crontab -
-	@echo "Done. Check with: crontab -l"
+	@case "$$(uname)" in \
+		Darwin) \
+			echo "Installing OAuth auto-refresh (every 6 hours via launchd)..."; \
+			mkdir -p $(HOME)/Library/LaunchAgents; \
+			echo '<?xml version="1.0" encoding="UTF-8"?>' > $(LAUNCHAGENT_PLIST); \
+			echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> $(LAUNCHAGENT_PLIST); \
+			echo '<plist version="1.0"><dict>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>Label</key><string>$(LAUNCHAGENT_LABEL)</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>WorkingDirectory</key><string>$(CURDIR)</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>ProgramArguments</key><array>' >> $(LAUNCHAGENT_PLIST); \
+			echo '    <string>/usr/bin/make</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '    <string>refresh-oauth</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  </array>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>StartInterval</key><integer>21600</integer>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>StandardOutPath</key><string>/tmp/oauth-refresh.log</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '  <key>StandardErrorPath</key><string>/tmp/oauth-refresh.log</string>' >> $(LAUNCHAGENT_PLIST); \
+			echo '</dict></plist>' >> $(LAUNCHAGENT_PLIST); \
+			launchctl unload $(LAUNCHAGENT_PLIST) 2>/dev/null || true; \
+			launchctl load $(LAUNCHAGENT_PLIST); \
+			echo "Done. Check with: launchctl list | grep pr-resolver"; \
+			;; \
+		*) \
+			echo "Installing OAuth auto-refresh (every 6 hours via cron)..."; \
+			(crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth"; \
+				echo "0 */6 * * * cd $(CURDIR) && make refresh-oauth >> /tmp/oauth-refresh.log 2>&1") | crontab -; \
+			echo "Done. Check with: crontab -l"; \
+			;; \
+	esac
 
 uninstall-refresh:
-	@crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth" | crontab -
-	@echo "OAuth auto-refresh removed."
+	@case "$$(uname)" in \
+		Darwin) \
+			launchctl unload $(LAUNCHAGENT_PLIST) 2>/dev/null || true; \
+			rm -f $(LAUNCHAGENT_PLIST); \
+			echo "OAuth auto-refresh LaunchAgent removed."; \
+			;; \
+		*) \
+			crontab -l 2>/dev/null | grep -v "pr-resolver.*refresh-oauth" | crontab -; \
+			echo "OAuth auto-refresh cron removed."; \
+			;; \
+	esac
 
 sync-workflow:
 	@echo "Syncing workflow to all repos..."
