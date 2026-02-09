@@ -135,6 +135,8 @@ setup-key:
 	@echo "Done. Run 'make restart' to apply."
 
 setup-oauth:
+	@echo "Refreshing OAuth token..."
+	@claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true
 	@echo "Extracting OAuth token..."
 	@TOKEN_JSON=""; \
 	case "$$(uname)" in \
