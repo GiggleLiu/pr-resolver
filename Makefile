@@ -124,14 +124,14 @@ install-refresh:
 		echo '    <string>$(CURDIR)</string>' >> "$(REFRESH_PLIST)"; \
 		echo '    <string>refresh-oauth</string>' >> "$(REFRESH_PLIST)"; \
 		echo '  </array>' >> "$(REFRESH_PLIST)"; \
-		echo '  <key>StartInterval</key><integer>21600</integer>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>StartInterval</key><integer>3600</integer>' >> "$(REFRESH_PLIST)"; \
 		echo '  <key>RunAtLoad</key><true/>' >> "$(REFRESH_PLIST)"; \
 		echo '  <key>StandardOutPath</key><string>/tmp/refresh-oauth.log</string>' >> "$(REFRESH_PLIST)"; \
 		echo '  <key>StandardErrorPath</key><string>/tmp/refresh-oauth.log</string>' >> "$(REFRESH_PLIST)"; \
 		echo '</dict></plist>' >> "$(REFRESH_PLIST)"; \
 		launchctl unload "$(REFRESH_PLIST)" 2>/dev/null || true; \
 		launchctl load "$(REFRESH_PLIST)"; \
-		echo "LaunchAgent installed: refresh OAuth every 6 hours"; \
+		echo "LaunchAgent installed: refresh OAuth every hour"; \
 		echo "Log: /tmp/refresh-oauth.log"; \
 	else \
 		SCRIPT_PATH="$(CURDIR)/refresh-oauth.sh"; \
