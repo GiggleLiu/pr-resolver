@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key refresh-oauth sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -25,6 +25,9 @@ help:
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
+	@echo "  make refresh-oauth           # Refresh OAuth token file"
+	@echo "  make install-refresh         # Auto-refresh OAuth every 6h"
+	@echo "  make uninstall-refresh       # Remove auto-refresh"
 	@echo "  make sync-workflow           # Install caller workflow to all repos"
 	@echo "  make round-trip              # End-to-end test (creates PR, runs [action], [fix])"
 	@echo ""
@@ -104,6 +107,50 @@ refresh-oauth:
 		fi; \
 	else \
 		echo "Not on macOS - skipping (use credentials file or API key instead)"; \
+	fi
+
+REFRESH_LABEL := com.pr-resolver.refresh-oauth
+REFRESH_PLIST := $(HOME)/Library/LaunchAgents/$(REFRESH_LABEL).plist
+
+install-refresh:
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(REFRESH_PLIST)"; \
+		echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(REFRESH_PLIST)"; \
+		echo '<plist version="1.0"><dict>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>Label</key><string>$(REFRESH_LABEL)</string>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>ProgramArguments</key><array>' >> "$(REFRESH_PLIST)"; \
+		echo '    <string>/usr/bin/make</string>' >> "$(REFRESH_PLIST)"; \
+		echo '    <string>-C</string>' >> "$(REFRESH_PLIST)"; \
+		echo '    <string>$(CURDIR)</string>' >> "$(REFRESH_PLIST)"; \
+		echo '    <string>refresh-oauth</string>' >> "$(REFRESH_PLIST)"; \
+		echo '  </array>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>StartInterval</key><integer>21600</integer>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>RunAtLoad</key><true/>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>StandardOutPath</key><string>/tmp/refresh-oauth.log</string>' >> "$(REFRESH_PLIST)"; \
+		echo '  <key>StandardErrorPath</key><string>/tmp/refresh-oauth.log</string>' >> "$(REFRESH_PLIST)"; \
+		echo '</dict></plist>' >> "$(REFRESH_PLIST)"; \
+		launchctl unload "$(REFRESH_PLIST)" 2>/dev/null || true; \
+		launchctl load "$(REFRESH_PLIST)"; \
+		echo "LaunchAgent installed: refresh OAuth every 6 hours"; \
+		echo "Log: /tmp/refresh-oauth.log"; \
+	else \
+		SCRIPT_PATH="$(CURDIR)/refresh-oauth.sh"; \
+		echo '#!/bin/bash' > "$$SCRIPT_PATH"; \
+		echo 'cd "$(CURDIR)" && make refresh-oauth' >> "$$SCRIPT_PATH"; \
+		chmod +x "$$SCRIPT_PATH"; \
+		(crontab -l 2>/dev/null | grep -v "refresh-oauth"; echo "0 */6 * * * $$SCRIPT_PATH >> /tmp/refresh-oauth.log 2>&1") | crontab -; \
+		echo "Cron installed: refresh OAuth every 6 hours"; \
+	fi
+
+uninstall-refresh:
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		launchctl unload "$(REFRESH_PLIST)" 2>/dev/null || true; \
+		rm -f "$(REFRESH_PLIST)"; \
+		echo "LaunchAgent removed"; \
+	else \
+		crontab -l 2>/dev/null | grep -v "refresh-oauth" | crontab - || true; \
+		rm -f "$(CURDIR)/refresh-oauth.sh"; \
+		echo "Cron removed"; \
 	fi
 
 start: refresh-oauth
