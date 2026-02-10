@@ -190,11 +190,19 @@ jobs:
         id: plan
         if: needs.setup.outputs.command == 'action'
         run: |
+          # Priority 1: well-known fixed paths
           for f in PLAN.md plan.md .claude/plan.md docs/plan.md; do
             [ -f "$f" ] && echo "file=$f" >> $GITHUB_OUTPUT && exit 0
           done
-          latest=$(ls -t docs/plans/*.md 2>/dev/null | head -1)
-          [ -n "$latest" ] && echo "file=$latest" >> $GITHUB_OUTPUT && exit 0
+
+          # Priority 2: plan file changed in this PR branch
+          changed=$(git diff --name-only --diff-filter=AM origin/main...HEAD -- 'docs/plans/*.md' 2>/dev/null | tail -1)
+          [ -n "$changed" ] && [ -f "$changed" ] && echo "file=$changed" >> $GITHUB_OUTPUT && exit 0
+
+          # Priority 3: most recently committed plan file
+          latest=$(git log --diff-filter=AM --name-only --pretty=format: -- 'docs/plans/*.md' 2>/dev/null | grep -m1 '\.md$')
+          [ -n "$latest" ] && [ -f "$latest" ] && echo "file=$latest" >> $GITHUB_OUTPUT && exit 0
+
           echo "No plan file found" && exit 1
 
       - name: Execute plan
