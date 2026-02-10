@@ -193,12 +193,6 @@ jobs:
             fi
           fi
 
-          # Check runner environment (.env fallback)
-          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            echo "OAuth token found in runner environment"
-            exit 0
-          fi
-
           echo "Error: No credentials available (need ANTHROPIC_API_KEY secret or OAuth login)"
           exit 1
 
