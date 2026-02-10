@@ -70,7 +70,8 @@ make setup-key KEY=sk-ant-...
 
 # Option B: OAuth with Max/Pro subscription
 claude              # Login interactively once
-make restart        # OAuth is acquired from Keychain at job time
+make install-refresh  # Auto-refresh token every 6h
+make restart        # Starts runners (also refreshes token)
 ```
 
 #### GitHub-hosted
@@ -161,6 +162,8 @@ make update                    # Sync: add missing runners, remove unlisted
 make status                    # Check all runner statuses
 make start / stop / restart    # Control runners
 make setup-key KEY=sk-ant-...  # Set API key for all runners
+make refresh-oauth             # Manually refresh OAuth token file
+make install-refresh           # Auto-refresh OAuth every 6h
 make sync-workflow             # Install caller workflow to all repos
 make init-claude               # Install Claude CLI + superpowers
 make round-trip                # End-to-end test
@@ -186,17 +189,33 @@ Execute Job (self-hosted) ──► Acquire OAuth ──► Claude CLI
 1. You create a PR with `[action]` in body (or comment `[action]`)
 2. Caller workflow in your repo triggers the reusable workflow from pr-resolver
 3. Setup job runs on GitHub-hosted runner, sets pending status
-4. Execute job acquires OAuth from Keychain (or uses API key), runs Claude
+4. Execute job reads OAuth from `~/.claude-oauth-token` (or uses API key), runs Claude
 5. Claude reads plan, writes code, commits, pushes
 6. Workflow reports success/failure as PR status check
 
 **Reusable workflow**: Other repos reference this repo's workflow via `@main`. Updates to the workflow logic propagate automatically — no need to sync workflow files.
 
+## Authentication
+
+Two options:
+
+| Method | Best for | Setup |
+|--------|----------|-------|
+| **API key** | Pay per use, never expires | `make setup-key KEY=sk-ant-...` |
+| **OAuth (Max/Pro)** | Subscription users | `claude` once + `make install-refresh` |
+
+**OAuth details (self-hosted macOS):**
+- Runner LaunchAgents can't access the macOS Keychain directly (`SessionCreate=true` isolates the security session)
+- `make refresh-oauth` extracts the token from Keychain and writes it to `~/.claude-oauth-token`
+- `make start`/`make restart` automatically calls `refresh-oauth`
+- `make install-refresh` sets up a LaunchAgent to refresh every 6 hours
+- If the token is expired, it runs `claude -p "ping"` to trigger a refresh before extracting
+
 ## Requirements
 
 - **Authentication** (choose one):
   - [Anthropic API key](https://console.anthropic.com/) - pay per use, never expires
-  - Claude Max/Pro subscription - just login with `claude` once (OAuth acquired at job time)
+  - Claude Max/Pro subscription - login with `claude` once, then `make install-refresh`
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
 
 ## Troubleshooting
@@ -207,14 +226,18 @@ make status   # Check all runners
 make start    # Start all runners
 ```
 
-### "Invalid API key" or "Invalid bearer token" error
+### "Invalid API key" or "OAuth token has expired" error
 ```bash
 # Option A: Set API key for all runners
 make setup-key KEY=sk-ant-...
 make restart
 
-# Option B: Use OAuth with Max/Pro subscription
-claude   # Login interactively to refresh Keychain credentials
+# Option B: Refresh OAuth token
+make refresh-oauth
+make restart
+
+# If token keeps expiring, ensure auto-refresh is running:
+make install-refresh
 ```
 
 ### Workflow not triggering

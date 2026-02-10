@@ -204,7 +204,7 @@ jobs:
         run: |
           set -eo pipefail
           INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 100 -p "
+          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 500 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
           ${INSTRUCTIONS:+
           ## Additional Instructions
@@ -259,7 +259,7 @@ jobs:
           done
 
           INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 100 -p "
+          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 500 -p "
           Fix all issues with this PR: review comments AND CI failures.
           ${INSTRUCTIONS:+
           ## Additional Instructions

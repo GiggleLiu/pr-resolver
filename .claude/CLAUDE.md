@@ -13,13 +13,16 @@ The workflow is defined once in this repo and called as a **reusable workflow** 
 ```bash
 make update                              # Sync runners with config (add/remove)
 make status                              # Check all runner statuses
-make start                               # Start all runners
+make start                               # Start all runners (auto-refreshes OAuth)
 make stop                                # Stop all runners
-make restart                             # Restart all runners
+make restart                             # Restart all runners (auto-refreshes OAuth)
 make list                                # List configured repos
 make clean                               # Clean caches (saves ~3GB)
 make init-claude                         # Install Claude CLI + superpowers
 make setup-key KEY=sk-ant-...            # Set API key for all runners
+make refresh-oauth                       # Refresh OAuth token file from Keychain
+make install-refresh                     # Auto-refresh OAuth every 6h (LaunchAgent/cron)
+make uninstall-refresh                   # Remove auto-refresh
 make sync-workflow                       # Install caller workflow to all repos
 make round-trip                          # End-to-end test
 ```
@@ -36,19 +39,19 @@ Caller Workflow (in each repo) ──► Reusable Workflow (this repo)
 Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
        │
        ▼
-Execute Job ──► Self-hosted Runner ──► Acquire OAuth ──► Claude CLI
-       │                                                      │
-       │                                                      ▼
-       │                                              Read plan, implement,
-       │                                              commit, push
-       │                                                      │
-       └──── Status Check (✓/✗) ◄─────────────────────────────┘
+Execute Job ──► Self-hosted Runner ──► Read OAuth token ──► Claude CLI
+       │                                                        │
+       │                                                        ▼
+       │                                                Read plan, implement,
+       │                                                commit, push
+       │                                                        │
+       └──── Status Check (✓/✗) ◄───────────────────────────────┘
 ```
 
 **Flow:**
 1. User creates PR with `[action]` in body OR comments `[action]` → caller workflow triggers reusable workflow
 2. Setup job (always runs on GitHub-hosted) sets pending status immediately
-3. Execute job acquires OAuth from Keychain (or uses API key), runs Claude
+3. Execute job reads OAuth from `~/.claude-oauth-token` (or uses API key), runs Claude
 4. Claude commits, pushes, and posts summary comment
 5. Workflow reports success/failure via commit status API
 
@@ -86,7 +89,9 @@ Set these as repo variables (Settings → Variables → Actions):
 
 ## Authentication
 
-OAuth tokens are acquired **at job time** from the macOS Keychain (self-hosted) or from `ANTHROPIC_API_KEY` secret (GitHub-hosted). No scheduled refresh needed.
+OAuth tokens are read from `~/.claude-oauth-token` at job time. This file is written by `make refresh-oauth` (called automatically by `make start`/`restart`). On macOS, the token is extracted from the Keychain; runner LaunchAgents can't access the Keychain directly due to `SessionCreate=true`.
+
+**Auto-refresh:** `make install-refresh` sets up a LaunchAgent (macOS) or cron (Linux) to refresh the token every 6 hours. If the token is expired, it runs `claude -p "ping"` to trigger Claude CLI's internal refresh before extracting.
 
 ## Runner Configuration
 
@@ -103,11 +108,11 @@ make update
 # Option A: API key (pay per use, never expires)
 make setup-key KEY=sk-ant-...
 
-# Option B: OAuth with Max/Pro subscription (no setup needed)
-# Just run 'claude' interactively once to login.
-# The workflow acquires the token from Keychain at job time.
+# Option B: OAuth with Max/Pro subscription
+claude                  # Login interactively once
+make install-refresh    # Auto-refresh token every 6h
 
-# 4. Restart runners
+# 4. Start runners (also refreshes OAuth)
 make restart
 ```
 
