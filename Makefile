@@ -132,6 +132,19 @@ install-refresh:
 		launchctl unload "$(REFRESH_PLIST)" 2>/dev/null || true; \
 		launchctl load "$(REFRESH_PLIST)"; \
 		echo "LaunchAgent installed: refresh OAuth every hour"; \
+		echo ""; \
+		HOOK_PATH="$(CURDIR)/pre-job.sh"; \
+		for dir in $(BASE_DIR)/*/; do \
+			if [ -f "$$dir/.runner" ]; then \
+				name=$$(basename "$$dir"); \
+				grep -v "ACTIONS_RUNNER_HOOK_JOB_STARTED" "$$dir/.env" > "$$dir/.env.tmp" 2>/dev/null || true; \
+				mv "$$dir/.env.tmp" "$$dir/.env"; \
+				echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$$HOOK_PATH" >> "$$dir/.env"; \
+				echo "  [hook] $$name"; \
+			fi; \
+		done; \
+		echo ""; \
+		echo "Pre-job hook installed for all runners"; \
 		echo "Log: /tmp/refresh-oauth.log"; \
 	else \
 		SCRIPT_PATH="$(CURDIR)/refresh-oauth.sh"; \
