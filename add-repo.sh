@@ -58,30 +58,28 @@ if ! gh repo view "$REPO" &> /dev/null; then
 fi
 info "  Repo accessible"
 
-# Step 2: Add workflow file to repo
+# Step 2: Add caller workflow file to repo
 echo ""
-echo "Step 2: Adding workflow file..."
-WORKFLOW_URL="https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/.github/workflows/pr-automation.yml"
-WORKFLOW_CONTENT=$(curl -s "$WORKFLOW_URL")
+echo "Step 2: Adding caller workflow file..."
+CALLER_FILE="$(dirname "$0")/caller-workflow.yml"
 
-if [ -z "$WORKFLOW_CONTENT" ]; then
-    error "Failed to fetch workflow file"
+if [ ! -f "$CALLER_FILE" ]; then
+    error "caller-workflow.yml not found in $(dirname "$0")"
 fi
 
 # Check if workflow already exists
 if gh api "repos/$REPO/contents/.github/workflows/pr-automation.yml" &> /dev/null; then
     warn "  Workflow file already exists, skipping"
 else
-    # Create workflow file via GitHub API
-    ENCODED=$(echo -n "$WORKFLOW_CONTENT" | base64)
+    ENCODED=$(base64 < "$CALLER_FILE")
     if gh api "repos/$REPO/contents/.github/workflows/pr-automation.yml" \
         --method PUT \
-        -f message="Add PR automation workflow" \
+        -f message="Add PR automation workflow (calls reusable workflow from pr-resolver)" \
         -f content="$ENCODED" > /dev/null 2>&1; then
-        info "  Workflow file added"
+        info "  Caller workflow added"
     else
         warn "  No write access - cannot add workflow file"
-        NEEDS_ADMIN+=("Add workflow: copy .github/workflows/pr-automation.yml to the repo")
+        NEEDS_ADMIN+=("Add workflow: copy caller-workflow.yml to .github/workflows/pr-automation.yml")
     fi
 fi
 

@@ -1,15 +1,17 @@
 name: PR Automation
 
 on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
   issue_comment:
     types: [created]
   pull_request:
     types: [opened]
 
 jobs:
-  # First job runs on GitHub-hosted runner to set pending status immediately
   setup:
-    # Run on PR comments with commands OR PR creation with commands in body
     if: |
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
@@ -43,12 +45,10 @@ jobs:
             let prData, body, prNumber;
 
             if (context.eventName === 'pull_request') {
-              // PR creation event - data is directly available
               prData = context.payload.pull_request;
               body = prData.body || '';
               prNumber = prData.number;
             } else {
-              // Comment event - need to fetch PR data
               const pr = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -64,12 +64,10 @@ jobs:
             core.setOutput('sha', sha);
             core.setOutput('pr_number', prNumber);
 
-            // Extract command - for PR body, search anywhere; for comments, must start with command
             let command = 'unknown';
             let instructions = '';
 
             if (context.eventName === 'pull_request') {
-              // For PR body, find command anywhere in text
               if (body.includes('[action]')) {
                 command = 'action';
                 const match = body.match(/\[action\](.*?)(?=\[(?:action|fix|debug)\]|$)/s);
@@ -82,7 +80,6 @@ jobs:
                 command = 'debug';
               }
             } else {
-              // For comments, must start with command
               if (body.startsWith('[action]')) {
                 command = 'action';
                 instructions = body.slice('[action]'.length).trim();
@@ -97,7 +94,6 @@ jobs:
             core.setOutput('command', command);
             core.setOutput('instructions', instructions);
 
-            // Set pending status immediately
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -139,18 +135,72 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js (GitHub-hosted only)
-        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
+        if: vars.RUNNER_TYPE != 'self-hosted'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Claude Code CLI (GitHub-hosted only)
-        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
+        if: vars.RUNNER_TYPE != 'self-hosted'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Install superpowers plugin (GitHub-hosted only)
-        if: ${{ vars.RUNNER_TYPE != 'self-hosted' }}
+        if: vars.RUNNER_TYPE != 'self-hosted'
         run: claude plugin install anthropics/claude-code-superpowers
+
+      - name: Acquire credentials
+        env:
+          ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Use API key from secret if available
+          if [ -n "$ANTHROPIC_API_KEY_SECRET" ]; then
+            echo "::add-mask::$ANTHROPIC_API_KEY_SECRET"
+            echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY_SECRET" >> $GITHUB_ENV
+            echo "Using API key from secret"
+            exit 0
+          fi
+
+          # Self-hosted macOS: acquire OAuth from Keychain
+          if [ "$(uname)" = "Darwin" ]; then
+            TOKEN_JSON=$(security find-generic-password -s "Claude Code-credentials" -a "$(whoami)" -w 2>/dev/null || echo "")
+            if [ -n "$TOKEN_JSON" ]; then
+              ACCESS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
+              EXPIRES_MS=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null)
+              NOW_MS=$(($(date +%s) * 1000))
+              if [ -n "$EXPIRES_MS" ] && [ "$EXPIRES_MS" -le "$NOW_MS" ] 2>/dev/null; then
+                echo "OAuth token expired, refreshing..."
+                timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true
+                TOKEN_JSON=$(security find-generic-password -s "Claude Code-credentials" -a "$(whoami)" -w 2>/dev/null || echo "")
+                ACCESS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
+              fi
+              if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+                echo "::add-mask::$ACCESS_TOKEN"
+                echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+                echo "OAuth token acquired from Keychain"
+                exit 0
+              fi
+            fi
+          fi
+
+          # Self-hosted Linux: read from credentials file
+          if [ -f ~/.claude/.credentials.json ]; then
+            ACCESS_TOKEN=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json 2>/dev/null)
+            if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+              echo "::add-mask::$ACCESS_TOKEN"
+              echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+              echo "OAuth token acquired from credentials file"
+              exit 0
+            fi
+          fi
+
+          # Check runner environment (.env fallback)
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "OAuth token found in runner environment"
+            exit 0
+          fi
+
+          echo "Error: No credentials available (need ANTHROPIC_API_KEY secret or OAuth login)"
+          exit 1
 
       - name: Find plan file
         id: plan
@@ -166,22 +216,11 @@ jobs:
       - name: Execute plan
         if: needs.setup.outputs.command == 'action'
         env:
-          ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
-          # Use secret if set, otherwise use runner's env (or OAuth from keychain)
-          [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
-
-          # For GitHub-hosted runners, API key is required
-          # For self-hosted runners, OAuth from keychain is also supported
-          if [ -z "$ANTHROPIC_API_KEY" ] && [ "${{ vars.RUNNER_TYPE }}" != "self-hosted" ]; then
-            echo "Error: ANTHROPIC_API_KEY not set (required for GitHub-hosted runners)" | tee claude-output.txt
-            exit 1
-          fi
-
           INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --max-turns 100 -p "
+          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 100 -p "
           Execute the plan in '${{ steps.plan.outputs.file }}'.
           ${INSTRUCTIONS:+
           ## Additional Instructions
@@ -214,19 +253,9 @@ jobs:
       - name: Fix issues
         if: needs.setup.outputs.command == 'fix'
         env:
-          ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
-          # Use secret if set, otherwise use runner's env (or OAuth from keychain)
-          [ -n "$ANTHROPIC_API_KEY_SECRET" ] && export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_SECRET"
-
-          # For GitHub-hosted runners, API key is required
-          # For self-hosted runners, OAuth from keychain is also supported
-          if [ -z "$ANTHROPIC_API_KEY" ] && [ "${{ vars.RUNNER_TYPE }}" != "self-hosted" ]; then
-            echo "Error: ANTHROPIC_API_KEY not set (required for GitHub-hosted runners)" | tee claude-output.txt
-            exit 1
-          fi
 
           # Gather all feedback sources
           INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ needs.setup.outputs.pr_number }}/comments --jq '.[].body' 2>/dev/null || echo "")
@@ -246,7 +275,7 @@ jobs:
           done
 
           INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --max-turns 100 -p "
+          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 100 -p "
           Fix all issues with this PR: review comments AND CI failures.
           ${INSTRUCTIONS:+
           ## Additional Instructions

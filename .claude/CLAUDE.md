@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PR Automation system - include `[action]` or `[fix]` in PR body or comments to trigger Claude Code to execute plans or address review feedback. Uses GitHub Actions with self-hosted runners.
 
+The workflow is defined once in this repo and called as a **reusable workflow** by other repos via `uses: GiggleLiu/pr-resolver/.github/workflows/pr-automation.yml@main`.
+
 ## Commands
 
 ```bash
@@ -18,10 +20,7 @@ make list                                # List configured repos
 make clean                               # Clean caches (saves ~3GB)
 make init-claude                         # Install Claude CLI + superpowers
 make setup-key KEY=sk-ant-...            # Set API key for all runners
-make setup-oauth                         # Set OAuth token (Max/Pro subscription)
-make install-refresh                     # Auto-refresh OAuth every 6h (launchd/cron)
-make refresh-oauth                       # Manually refresh OAuth token
-make sync-workflow                       # Install workflow to all repos
+make sync-workflow                       # Install caller workflow to all repos
 make round-trip                          # End-to-end test
 ```
 
@@ -31,31 +30,34 @@ make round-trip                          # End-to-end test
 PR Created / Comment Posted
        │
        ▼
+Caller Workflow (in each repo) ──► Reusable Workflow (this repo)
+       │                                    │
+       ▼                                    ▼
 Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
        │
        ▼
-Execute Job ──► Self-hosted Runner ──► Claude CLI
-       │                                    │
-       │                                    ▼
-       │                            Read plan, implement,
-       │                            commit, push
-       │                                    │
-       └──── Status Check (✓/✗) ◄───────────┘
+Execute Job ──► Self-hosted Runner ──► Acquire OAuth ──► Claude CLI
+       │                                                      │
+       │                                                      ▼
+       │                                              Read plan, implement,
+       │                                              commit, push
+       │                                                      │
+       └──── Status Check (✓/✗) ◄─────────────────────────────┘
 ```
 
 **Flow:**
-1. User creates PR with `[action]` in body OR comments `[action]` → GitHub triggers workflow
+1. User creates PR with `[action]` in body OR comments `[action]` → caller workflow triggers reusable workflow
 2. Setup job (always runs on GitHub-hosted) sets pending status immediately
-3. Execute job waits for runner, checks out PR branch, finds plan file
-4. Runs `claude --dangerously-skip-permissions` to execute plan
-5. Claude commits, pushes, and posts summary comment
-6. Workflow reports success/failure via commit status API
+3. Execute job acquires OAuth from Keychain (or uses API key), runs Claude
+4. Claude commits, pushes, and posts summary comment
+5. Workflow reports success/failure via commit status API
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/pr-automation.yml` | Workflow triggered by PR creation/comments |
+| `.github/workflows/pr-automation.yml` | Reusable workflow (workflow_call + direct triggers) |
+| `caller-workflow.yml` | Template deployed to other repos (thin caller) |
 | `runner-config.toml` | Source of truth for managed repos |
 | `Makefile` | Runner management commands |
 | `add-repo.sh` | Setup script (called by make update) |
@@ -73,15 +75,18 @@ Execute Job ──► Self-hosted Runner ──► Claude CLI
 - **PR creation**: Include command anywhere in the PR body
 - **Comment**: Post a comment that starts with the command
 
-## Status Reporting
+## Configuration Variables
 
-Status is shown directly in the PR's status checks (not comments):
-- **Pending (Waiting for runner...)**: Setup complete, waiting for runner to pick up job
-- **Pending (Running...)**: Runner picked up job, Claude is executing
-- **Success**: Plan executed successfully
-- **Failure**: Error occurred (check Actions log)
+Set these as repo variables (Settings → Variables → Actions):
 
-After execution, Claude posts a summary comment describing what was done.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
+| `CLAUDE_MODEL` | `opus` | Claude model to use (e.g., `opus`, `sonnet`) |
+
+## Authentication
+
+OAuth tokens are acquired **at job time** from the macOS Keychain (self-hosted) or from `ANTHROPIC_API_KEY` secret (GitHub-hosted). No scheduled refresh needed.
 
 ## Runner Configuration
 
@@ -98,21 +103,12 @@ make update
 # Option A: API key (pay per use, never expires)
 make setup-key KEY=sk-ant-...
 
-# Option B: OAuth with Max/Pro subscription (no API key needed)
-claude               # Login interactively first
-make setup-oauth     # Extract token from keychain
-make install-refresh # Auto-refresh every 6 hours (launchd on macOS, cron on Linux)
+# Option B: OAuth with Max/Pro subscription (no setup needed)
+# Just run 'claude' interactively once to login.
+# The workflow acquires the token from Keychain at job time.
 
 # 4. Restart runners
 make restart
-```
-
-### Remove a Runner
-
-```bash
-# 1. Remove from runner-config.toml
-# 2. Sync
-make update
 ```
 
 ### GitHub-hosted Runner (Alternative)
@@ -122,21 +118,3 @@ Just add `ANTHROPIC_API_KEY` to repository secrets — no other setup needed.
 The workflow uses `runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}`:
 - If `RUNNER_TYPE=self-hosted` → uses your self-hosted runner
 - If not set → defaults to GitHub-hosted `ubuntu-latest`
-
-## Development
-
-The workflow (`pr-automation.yml`) has two jobs:
-
-**Setup job** (runs on GitHub-hosted `ubuntu-latest`):
-1. Extracts PR details (branch, SHA, command, instructions)
-2. Sets pending status with "Waiting for runner..."
-3. Outputs values for execute job
-
-**Execute job** (runs on configured runner, depends on setup):
-1. Updates status to "Running..."
-2. Checks out PR branch, finds plan file
-3. Validates API key, runs Claude with appropriate prompt
-4. Checks output for authentication errors
-5. Sets success/failure status
-
-Claude is invoked with `--dangerously-skip-permissions` and `--max-turns 100` to allow autonomous execution within the sandboxed runner environment.

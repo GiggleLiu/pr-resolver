@@ -33,9 +33,11 @@ GitHub Action runner that **uses Claude superpowers to implement your plans.** W
 ```bash
 mkdir -p .github/workflows
 curl -o .github/workflows/pr-automation.yml \
-  https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/.github/workflows/pr-automation.yml
+  https://raw.githubusercontent.com/GiggleLiu/pr-resolver/main/caller-workflow.yml
 git add .github/workflows && git commit -m "Add PR automation" && git push
 ```
+
+This installs a thin caller that references the [reusable workflow](https://docs.github.com/en/actions/using-workflows/reusing-workflows) in this repo. Updates to the workflow logic are picked up automatically.
 
 ### 2. Setup a runner
 
@@ -47,7 +49,6 @@ The workflow needs a GitHub Actions runner. Choose one:
 | **GitHub-hosted** | Occasional use, no local setup | 2 min |
 
 #### Self-hosted (recommended)
-Just add `RUNNER_TYPE` to repo variables (Settings → Secretes and Variables → Actions → Variables → New repository variable).
 
 ```bash
 # Clone this repo
@@ -67,11 +68,9 @@ make update
 # Option A: API key (pay per use)
 make setup-key KEY=sk-ant-...
 
-# Option B: OAuth with Max/Pro subscription (no API key needed)
-claude              # Login interactively first
-make setup-oauth    # Extract token from keychain
-make install-refresh # Auto-refresh token every 6 hours (launchd on macOS, cron on Linux)
-make restart
+# Option B: OAuth with Max/Pro subscription
+claude              # Login interactively once
+make restart        # OAuth is acquired from Keychain at job time
 ```
 
 #### GitHub-hosted
@@ -132,7 +131,18 @@ This fetches the issue, brainstorms solutions with you, writes a plan, and creat
 
 > **Note:** Copy `.claude/skills/issue-to-pr.md` from this repo to your target repo's `.claude/skills/` directory to enable this skill.
 
-## Managing Multiple Repos
+## Configuration
+
+### Repo Variables
+
+Set these as repo variables (Settings → Variables → Actions):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
+| `CLAUDE_MODEL` | `opus` | Claude model to use (e.g., `opus`, `sonnet`) |
+
+### Managing Multiple Repos
 
 Edit `runner-config.toml` and run `make update`:
 
@@ -151,9 +161,7 @@ make update                    # Sync: add missing runners, remove unlisted
 make status                    # Check all runner statuses
 make start / stop / restart    # Control runners
 make setup-key KEY=sk-ant-...  # Set API key for all runners
-make setup-oauth               # Set OAuth token from keychain (Max/Pro)
-make install-refresh           # Auto-refresh OAuth every 6h (launchd/cron)
-make sync-workflow             # Install workflow to all repos
+make sync-workflow             # Install caller workflow to all repos
 make init-claude               # Install Claude CLI + superpowers
 make round-trip                # End-to-end test
 ```
@@ -164,31 +172,32 @@ make round-trip                # End-to-end test
 PR Created / Comment Posted
        │
        ▼
-Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
+Caller Workflow (in repo) ──► Reusable Workflow (pr-resolver)
+       │                                │
+       ▼                                ▼
+Setup Job (GitHub-hosted) ──► Set pending status
        │
        ▼
-Execute Job ──► Self-hosted Runner ──► Claude CLI
-       │                                    │
-       │                                    ▼
-       │                            Read plan, implement,
-       │                            commit, push
-       │                                    │
-       └──── Status Check (✓/✗) ◄───────────┘
+Execute Job (self-hosted) ──► Acquire OAuth ──► Claude CLI
+       │                                            │
+       └──── Status Check (✓/✗) ◄───────────────────┘
 ```
 
 1. You create a PR with `[action]` in body (or comment `[action]`)
-2. Setup job runs immediately on GitHub-hosted runner, sets pending status
-3. Execute job waits for your runner, updates status to "Running..."
-4. Claude reads plan, writes code, commits, pushes
-5. Workflow reports success/failure as PR status check
+2. Caller workflow in your repo triggers the reusable workflow from pr-resolver
+3. Setup job runs on GitHub-hosted runner, sets pending status
+4. Execute job acquires OAuth from Keychain (or uses API key), runs Claude
+5. Claude reads plan, writes code, commits, pushes
+6. Workflow reports success/failure as PR status check
+
+**Reusable workflow**: Other repos reference this repo's workflow via `@main`. Updates to the workflow logic propagate automatically — no need to sync workflow files.
 
 ## Requirements
 
 - **Authentication** (choose one):
   - [Anthropic API key](https://console.anthropic.com/) - pay per use, never expires
-  - Claude Max/Pro subscription - use `make setup-oauth` (requires `jq`, token expires every ~8h)
+  - Claude Max/Pro subscription - just login with `claude` once (OAuth acquired at job time)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
-- macOS or Linux (launchd on macOS, cron on Linux for OAuth auto-refresh)
 
 ## Troubleshooting
 
@@ -205,18 +214,7 @@ make setup-key KEY=sk-ant-...
 make restart
 
 # Option B: Use OAuth with Max/Pro subscription
-claude               # Login interactively first
-make setup-oauth     # Extract token from keychain
-make install-refresh # Auto-refresh every 6 hours
-make restart
-```
-
-### OAuth token expired
-```bash
-make refresh-oauth   # Manually refresh token and restart runners
-# Or ensure auto-refresh is installed:
-# macOS: launchctl list | grep pr-resolver
-# Linux: crontab -l | grep pr-resolver
+claude   # Login interactively to refresh Keychain credentials
 ```
 
 ### Workflow not triggering
