@@ -160,26 +160,15 @@ jobs:
             exit 0
           fi
 
-          # Self-hosted macOS: acquire OAuth from Keychain
-          if [ "$(uname)" = "Darwin" ]; then
-            KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
-            TOKEN_JSON=$(security find-generic-password -s "Claude Code-credentials" -a "$(whoami)" -w "$KEYCHAIN" 2>/dev/null || echo "")
-            if [ -n "$TOKEN_JSON" ]; then
-              ACCESS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
-              EXPIRES_MS=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null)
-              NOW_MS=$(($(date +%s) * 1000))
-              if [ -n "$EXPIRES_MS" ] && [ "$EXPIRES_MS" -le "$NOW_MS" ] 2>/dev/null; then
-                echo "OAuth token expired, refreshing..."
-                timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true
-                TOKEN_JSON=$(security find-generic-password -s "Claude Code-credentials" -a "$(whoami)" -w "$KEYCHAIN" 2>/dev/null || echo "")
-                ACCESS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
-              fi
-              if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
-                echo "::add-mask::$ACCESS_TOKEN"
-                echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
-                echo "OAuth token acquired from Keychain"
-                exit 0
-              fi
+          # Self-hosted: read OAuth from token file (written by make start)
+          TOKEN_FILE="$HOME/.claude-oauth-token"
+          if [ -f "$TOKEN_FILE" ]; then
+            ACCESS_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null)
+            if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+              echo "::add-mask::$ACCESS_TOKEN"
+              echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+              echo "OAuth token acquired from token file"
+              exit 0
             fi
           fi
 

@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-claude setup-key refresh-oauth sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -77,7 +77,36 @@ status:
 		fi \
 	done
 
-start:
+refresh-oauth:
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
+		if [ -n "$$TOKEN_JSON" ]; then \
+			ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+			EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
+			NOW_MS=$$(($$(date +%s) * 1000)); \
+			if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$NOW_MS" ] 2>/dev/null; then \
+				echo "Token expired, refreshing via claude CLI..."; \
+				timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true; \
+				TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
+				ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+			fi; \
+			if [ -n "$$ACCESS_TOKEN" ] && [ "$$ACCESS_TOKEN" != "null" ]; then \
+				echo "$$ACCESS_TOKEN" > "$$HOME/.claude-oauth-token"; \
+				chmod 600 "$$HOME/.claude-oauth-token"; \
+				echo "OAuth token written to ~/.claude-oauth-token"; \
+			else \
+				echo "Error: Could not extract token from Keychain"; \
+				exit 1; \
+			fi; \
+		else \
+			echo "Error: No Claude credentials in Keychain. Run 'claude' to login first."; \
+			exit 1; \
+		fi; \
+	else \
+		echo "Not on macOS - skipping (use credentials file or API key instead)"; \
+	fi
+
+start: refresh-oauth
 	@echo "Starting all runners..."
 	@for dir in $(BASE_DIR)/*/; do \
 		if [ -f "$$dir/svc.sh" ]; then \
