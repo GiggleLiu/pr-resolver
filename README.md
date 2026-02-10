@@ -207,8 +207,9 @@ Two options:
 **OAuth details (self-hosted macOS):**
 - Runner LaunchAgents can't access the macOS Keychain directly (`SessionCreate=true` isolates the security session)
 - `make refresh-oauth` extracts the token from Keychain and writes it to `~/.claude-oauth-token`
-- `make start`/`make restart` automatically calls `refresh-oauth`
-- `make install-refresh` sets up a LaunchAgent to refresh every 6 hours
+- `make install-refresh` sets up:
+  - A **pre-job hook** on every runner — triggers a token refresh before each job, guaranteeing a fresh token
+  - A **LaunchAgent** that refreshes hourly as a safety net
 - If the token is expired, it runs `claude -p "ping"` to trigger a refresh before extracting
 
 ## Requirements

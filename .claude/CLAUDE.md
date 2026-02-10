@@ -91,7 +91,10 @@ Set these as repo variables (Settings → Variables → Actions):
 
 OAuth tokens are read from `~/.claude-oauth-token` at job time. This file is written by `make refresh-oauth` (called automatically by `make start`/`restart`). On macOS, the token is extracted from the Keychain; runner LaunchAgents can't access the Keychain directly due to `SessionCreate=true`.
 
-**Auto-refresh:** `make install-refresh` sets up a LaunchAgent (macOS) or cron (Linux) to refresh the token every 6 hours. If the token is expired, it runs `claude -p "ping"` to trigger Claude CLI's internal refresh before extracting.
+**Auto-refresh:** `make install-refresh` sets up:
+- A **pre-job hook** (`pre-job.sh`) on every runner — uses `launchctl kickstart` to trigger the refresh LaunchAgent before each job, guaranteeing a fresh token at job time
+- A **LaunchAgent** (macOS) or cron (Linux) that refreshes hourly as a safety net
+- If the token is expired, it runs `claude -p "ping"` to trigger Claude CLI's internal refresh before extracting
 
 ## Runner Configuration
 
