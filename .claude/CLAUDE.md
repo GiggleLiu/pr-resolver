@@ -96,6 +96,24 @@ OAuth tokens are read from `~/.claude-oauth-token` at job time. This file is wri
 - A **LaunchAgent** (macOS) or cron (Linux) that refreshes hourly as a safety net
 - If the token is expired, it runs `claude -p "ping"` to trigger Claude CLI's internal refresh before extracting
 
+### Why OAuth is hard on macOS (design notes)
+
+The core problem: GitHub Actions runner's `svc.sh` installs a LaunchAgent with `SessionCreate=true`, which creates an isolated security session. This means the runner process **cannot** access the user's login Keychain — `security find-generic-password` silently returns nothing.
+
+Approaches that **don't work**:
+- Reading Keychain directly from the workflow step (same isolated session)
+- Using a pre-job hook to read Keychain (runs in same runner process)
+- Using cron to refresh (cron also can't access Keychain on macOS)
+- Specifying explicit keychain path (still blocked by session isolation)
+- Storing token in runner `.env` file (stale when interactive `claude` rotates it)
+
+**Solution** — three-layer approach:
+1. **Pre-job hook** (`ACTIONS_RUNNER_HOOK_JOB_STARTED` in runner `.env`) calls `launchctl kickstart gui/UID/com.pr-resolver.refresh-oauth` to trigger a separate LaunchAgent
+2. **Refresh LaunchAgent** (`com.pr-resolver.refresh-oauth`) runs **without** `SessionCreate`, so it has Keychain access. It extracts the token and writes `~/.claude-oauth-token`
+3. **Workflow** reads the token file in the "Acquire credentials" step
+
+This guarantees a fresh token at every job start. The hourly LaunchAgent timer is a safety net.
+
 ## Runner Configuration
 
 ### Setup (Self-hosted)
