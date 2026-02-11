@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude setup-key refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-claude init-opencode init-agents setup-key refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -24,6 +24,8 @@ help:
 	@echo "  make list                    # List configured repos"
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
+	@echo "  make init-opencode           # Install OpenCode CLI"
+	@echo "  make init-agents             # Install all agent CLIs"
 	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
 	@echo "  make refresh-oauth           # Refresh OAuth token file"
 	@echo "  make install-refresh         # Auto-refresh OAuth every 6h"
@@ -267,6 +269,22 @@ init-claude:
 	fi
 	@echo ""
 	@echo "Done."
+
+init-opencode:
+	@echo "Checking OpenCode CLI setup..."
+	@echo ""
+	@if command -v opencode &> /dev/null; then \
+		echo "OpenCode: $$(opencode --version 2>/dev/null || echo 'installed')"; \
+	else \
+		echo "OpenCode: not found, installing..."; \
+		curl -fsSL https://opencode.ai/install.sh | bash; \
+	fi
+	@echo ""
+	@echo "Done. Run 'opencode' and use /connect to add providers (e.g., Moonshot for Kimi)."
+
+init-agents: init-claude init-opencode
+	@echo ""
+	@echo "All agents installed."
 
 round-trip:
 	@echo "=== Round-trip test ==="

@@ -5,6 +5,10 @@ on:
     secrets:
       ANTHROPIC_API_KEY:
         required: false
+      MOONSHOT_API_KEY:
+        required: false
+      OPENAI_API_KEY:
+        required: false
   issue_comment:
     types: [created]
   pull_request:
@@ -113,6 +117,10 @@ jobs:
       pull-requests: write
       statuses: write
 
+    env:
+      AGENT_TYPE: ${{ vars.AGENT_TYPE || 'claude' }}
+      AGENT_MODEL: ${{ vars.AGENT_MODEL || vars.CLAUDE_MODEL || '' }}
+
     steps:
       - name: Update status to running
         uses: actions/github-script@v7
@@ -124,7 +132,7 @@ jobs:
               sha: '${{ needs.setup.outputs.sha }}',
               state: 'pending',
               context: 'PR Automation / ${{ needs.setup.outputs.command }}',
-              description: 'Running...',
+              description: 'Running (${{ vars.AGENT_TYPE || 'claude' }})...',
               target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             });
 
@@ -134,57 +142,105 @@ jobs:
           ref: ${{ needs.setup.outputs.branch }}
           fetch-depth: 0
 
-      - name: Setup Node.js (GitHub-hosted only)
-        if: vars.RUNNER_TYPE != 'self-hosted'
+      - name: Checkout run-agent.sh from pr-resolver
+        uses: actions/checkout@v4
+        with:
+          repository: GiggleLiu/pr-resolver
+          path: .pr-resolver
+          sparse-checkout: run-agent.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Make run-agent.sh executable
+        run: chmod +x .pr-resolver/run-agent.sh
+
+      - name: Setup Node.js (GitHub-hosted, claude agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Claude Code CLI (GitHub-hosted only)
-        if: vars.RUNNER_TYPE != 'self-hosted'
+      - name: Install Claude Code CLI (GitHub-hosted, claude agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Install superpowers plugin (GitHub-hosted only)
-        if: vars.RUNNER_TYPE != 'self-hosted'
+      - name: Install superpowers plugin (GitHub-hosted, claude agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
         run: claude plugin install anthropics/claude-code-superpowers
+
+      - name: Install OpenCode CLI (GitHub-hosted, opencode agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'opencode'
+        run: curl -fsSL https://opencode.ai/install.sh | bash
 
       - name: Acquire credentials
         env:
           ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
+          MOONSHOT_API_KEY_SECRET: ${{ secrets.MOONSHOT_API_KEY }}
+          OPENAI_API_KEY_SECRET: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # Use API key from secret if available
-          if [ -n "$ANTHROPIC_API_KEY_SECRET" ]; then
-            echo "::add-mask::$ANTHROPIC_API_KEY_SECRET"
-            echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY_SECRET" >> $GITHUB_ENV
-            echo "Using API key from secret"
-            exit 0
-          fi
+          case "$AGENT_TYPE" in
+            claude)
+              # Use API key from secret if available
+              if [ -n "$ANTHROPIC_API_KEY_SECRET" ]; then
+                echo "::add-mask::$ANTHROPIC_API_KEY_SECRET"
+                echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY_SECRET" >> $GITHUB_ENV
+                echo "Using API key from secret"
+                exit 0
+              fi
 
-          # Self-hosted: read OAuth from token file (written by make start)
-          TOKEN_FILE="$HOME/.claude-oauth-token"
-          if [ -f "$TOKEN_FILE" ]; then
-            ACCESS_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null)
-            if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
-              echo "::add-mask::$ACCESS_TOKEN"
-              echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
-              echo "OAuth token acquired from token file"
-              exit 0
-            fi
-          fi
+              # Self-hosted: read OAuth from token file (written by make start)
+              TOKEN_FILE="$HOME/.claude-oauth-token"
+              if [ -f "$TOKEN_FILE" ]; then
+                ACCESS_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null)
+                if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+                  echo "::add-mask::$ACCESS_TOKEN"
+                  echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+                  echo "OAuth token acquired from token file"
+                  exit 0
+                fi
+              fi
 
-          # Self-hosted Linux: read from credentials file
-          if [ -f ~/.claude/.credentials.json ]; then
-            ACCESS_TOKEN=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json 2>/dev/null)
-            if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
-              echo "::add-mask::$ACCESS_TOKEN"
-              echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
-              echo "OAuth token acquired from credentials file"
-              exit 0
-            fi
-          fi
+              # Self-hosted Linux: read from credentials file
+              if [ -f ~/.claude/.credentials.json ]; then
+                ACCESS_TOKEN=$(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json 2>/dev/null)
+                if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+                  echo "::add-mask::$ACCESS_TOKEN"
+                  echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+                  echo "OAuth token acquired from credentials file"
+                  exit 0
+                fi
+              fi
 
-          echo "Error: No credentials available (need ANTHROPIC_API_KEY secret or OAuth login)"
-          exit 1
+              echo "Error: No Claude credentials available (need ANTHROPIC_API_KEY secret or OAuth login)"
+              exit 1
+              ;;
+
+            opencode)
+              # Self-hosted: providers pre-configured via opencode /connect
+              if [ -f "$HOME/.local/share/opencode/auth.json" ] || [ -f "$HOME/.config/opencode/opencode.json" ]; then
+                echo "Using pre-configured OpenCode providers"
+                exit 0
+              fi
+
+              # GitHub-hosted: pass API key from secret as env var
+              if [ -n "$MOONSHOT_API_KEY_SECRET" ]; then
+                echo "::add-mask::$MOONSHOT_API_KEY_SECRET"
+                echo "MOONSHOT_API_KEY=$MOONSHOT_API_KEY_SECRET" >> $GITHUB_ENV
+                echo "Using Moonshot API key from secret"
+              elif [ -n "$OPENAI_API_KEY_SECRET" ]; then
+                echo "::add-mask::$OPENAI_API_KEY_SECRET"
+                echo "OPENAI_API_KEY=$OPENAI_API_KEY_SECRET" >> $GITHUB_ENV
+                echo "Using OpenAI API key from secret"
+              else
+                echo "Error: No OpenCode credentials available (need MOONSHOT_API_KEY or OPENAI_API_KEY secret)"
+                exit 1
+              fi
+              ;;
+
+            *)
+              echo "Error: Unknown AGENT_TYPE '$AGENT_TYPE'. Supported: claude, opencode"
+              exit 1
+              ;;
+          esac
 
       - name: Find plan file
         id: plan
@@ -205,58 +261,75 @@ jobs:
 
           echo "No plan file found" && exit 1
 
+      - name: Build action prompt
+        id: action-prompt
+        if: needs.setup.outputs.command == 'action'
+        env:
+          INSTRUCTIONS: ${{ needs.setup.outputs.instructions }}
+          PLAN_FILE: ${{ steps.plan.outputs.file }}
+          BRANCH: ${{ needs.setup.outputs.branch }}
+          PR_NUMBER: ${{ needs.setup.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+
+          if [ "$AGENT_TYPE" = "claude" ]; then
+            PROCESS="1. Read the plan file
+          2. Use /subagent-driven-development to execute tasks
+          3. Push: git push origin $BRANCH
+          4. Post summary: gh pr comment $PR_NUMBER --repo $REPO --body 'SUMMARY'"
+          else
+            PROCESS="1. Read the plan file
+          2. Execute the tasks step by step. For each task, implement and test before moving on.
+          3. Push: git push origin $BRANCH
+          4. Post summary: gh pr comment $PR_NUMBER --repo $REPO --body 'SUMMARY'"
+          fi
+
+          {
+            echo 'prompt<<PROMPT_EOF'
+            echo "Execute the plan in '$PLAN_FILE'."
+            if [ -n "$INSTRUCTIONS" ]; then
+              echo ""
+              echo "## Additional Instructions"
+              echo "$INSTRUCTIONS"
+            fi
+            echo ""
+            echo "## Process"
+            echo "$PROCESS"
+            echo ""
+            echo "## Rules"
+            echo "- Tests should be strong enough to catch regressions."
+            echo "- Do not modify tests to make them pass."
+            echo "- Test failure must be reported."
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_OUTPUT
+
       - name: Execute plan
         if: needs.setup.outputs.command == 'action'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMPT: ${{ steps.action-prompt.outputs.prompt }}
         run: |
           set -eo pipefail
-          INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 500 -p "
-          Execute the plan in '${{ steps.plan.outputs.file }}'.
-          ${INSTRUCTIONS:+
-          ## Additional Instructions
-          $INSTRUCTIONS
-          }
-          ## Process
-          1. Read the plan file
-          2. Use /subagent-driven-development to execute tasks
-          3. Push: git push origin ${{ needs.setup.outputs.branch }}
-          4. Post summary: gh pr comment ${{ needs.setup.outputs.pr_number }} --repo ${{ github.repository }} --body 'SUMMARY'
+          .pr-resolver/run-agent.sh "$AGENT_TYPE" "$AGENT_MODEL" "$PROMPT"
 
-          ## Rules
-          - Tests should be strong enough to catch regressions.
-          - Do not modify tests to make them pass.
-          - Test failure must be reported.
-          " 2>&1 | tee claude-output.txt
-
-          # Check for authentication errors in output
-          if grep -qiE "authenticat(e|ion)|unauthorized|forbidden|invalid.*key|api.*key.*invalid|API Error: 40[13]" claude-output.txt; then
-            echo "Error: Authentication failure detected"
-            exit 1
-          fi
-
-          # Check for max turns exhaustion
-          if grep -q "Reached max turns" claude-output.txt; then
-            echo "Error: Claude exhausted max turns without completing"
-            exit 1
-          fi
-
-      - name: Fix issues
+      - name: Build fix prompt
+        id: fix-prompt
         if: needs.setup.outputs.command == 'fix'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INSTRUCTIONS: ${{ needs.setup.outputs.instructions }}
+          BRANCH: ${{ needs.setup.outputs.branch }}
+          PR_NUMBER: ${{ needs.setup.outputs.pr_number }}
+          REPO: ${{ github.repository }}
         run: |
-          set -eo pipefail
-
           # Gather all feedback sources
-          INLINE=$(gh api repos/${{ github.repository }}/pulls/${{ needs.setup.outputs.pr_number }}/comments --jq '.[].body' 2>/dev/null || echo "")
-          REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ needs.setup.outputs.pr_number }}/reviews --jq '.[] | select(.body != "") | .body' 2>/dev/null || echo "")
-          PR_COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ needs.setup.outputs.pr_number }}/comments --jq '.[].body' 2>/dev/null || echo "")
+          INLINE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
+          REVIEWS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --jq '.[] | select(.body != "") | .body' 2>/dev/null || echo "")
+          PR_COMMENTS=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
 
           # Gather CI status
-          CI_STATUS=$(gh pr checks ${{ needs.setup.outputs.pr_number }} --repo ${{ github.repository }} 2>/dev/null || echo "")
-          FAILED_RUNS=$(gh run list --branch ${{ needs.setup.outputs.branch }} --status failure --limit 3 --json databaseId,name --jq '.[] | "\(.databaseId) \(.name)"' 2>/dev/null || echo "")
+          CI_STATUS=$(gh pr checks "$PR_NUMBER" --repo "$REPO" 2>/dev/null || echo "")
+          FAILED_RUNS=$(gh run list --branch "$BRANCH" --status failure --limit 3 --json databaseId,name --jq '.[] | "\(.databaseId) \(.name)"' 2>/dev/null || echo "")
 
           # Get failed run logs if any
           CI_LOGS=""
@@ -266,57 +339,63 @@ jobs:
           $(gh run view $run_id --log-failed 2>/dev/null | tail -100 || echo 'Could not fetch logs')"
           done
 
-          INSTRUCTIONS='${{ needs.setup.outputs.instructions }}'
-          claude --dangerously-skip-permissions --model ${{ vars.CLAUDE_MODEL || 'opus' }} --max-turns 500 -p "
-          Fix all issues with this PR: review comments AND CI failures.
-          ${INSTRUCTIONS:+
-          ## Additional Instructions
-          $INSTRUCTIONS
-          }
-          === Inline Code Comments ===
-          $INLINE
-
-          === PR Reviews ===
-          $REVIEWS
-
-          === PR Conversation ===
-          $PR_COMMENTS
-
-          === CI Status ===
-          $CI_STATUS
-
-          === Failed CI Logs (last 100 lines each) ===
-          $CI_LOGS
-
-          ## Process
-          1. Use /systematic-debugging if CI failed
-          2. Fix review comments and CI issues
-          3. Run tests to verify: make test, cargo test, npm test, etc.
-          4. Commit: git commit -am 'Fix review feedback and CI issues'
-          5. Push: git push origin ${{ needs.setup.outputs.branch }}
-          6. Post summary: gh pr comment ${{ needs.setup.outputs.pr_number }} --repo ${{ github.repository }} --body 'SUMMARY'
-
-          ## Rules
-          - All CI failures must be fixed.
-          - All change requests must be either addressed or explained.
-          " 2>&1 | tee claude-output.txt
-
-          # Check for authentication errors in output
-          if grep -qiE "authenticat(e|ion)|unauthorized|forbidden|invalid.*key|api.*key.*invalid|API Error: 40[13]" claude-output.txt; then
-            echo "Error: Authentication failure detected"
-            exit 1
+          if [ "$AGENT_TYPE" = "claude" ]; then
+            DEBUG_STEP="1. Use /systematic-debugging if CI failed"
+          else
+            DEBUG_STEP="1. Analyze CI failure logs to identify root causes"
           fi
 
-          # Check for max turns exhaustion
-          if grep -q "Reached max turns" claude-output.txt; then
-            echo "Error: Claude exhausted max turns without completing"
-            exit 1
-          fi
+          {
+            echo 'prompt<<PROMPT_EOF'
+            echo "Fix all issues with this PR: review comments AND CI failures."
+            if [ -n "$INSTRUCTIONS" ]; then
+              echo ""
+              echo "## Additional Instructions"
+              echo "$INSTRUCTIONS"
+            fi
+            echo ""
+            echo "=== Inline Code Comments ==="
+            echo "$INLINE"
+            echo ""
+            echo "=== PR Reviews ==="
+            echo "$REVIEWS"
+            echo ""
+            echo "=== PR Conversation ==="
+            echo "$PR_COMMENTS"
+            echo ""
+            echo "=== CI Status ==="
+            echo "$CI_STATUS"
+            echo ""
+            echo "=== Failed CI Logs (last 100 lines each) ==="
+            echo "$CI_LOGS"
+            echo ""
+            echo "## Process"
+            echo "$DEBUG_STEP"
+            echo "2. Fix review comments and CI issues"
+            echo "3. Run tests to verify: make test, cargo test, npm test, etc."
+            echo "4. Commit: git commit -am 'Fix review feedback and CI issues'"
+            echo "5. Push: git push origin $BRANCH"
+            echo "6. Post summary: gh pr comment $PR_NUMBER --repo $REPO --body 'SUMMARY'"
+            echo ""
+            echo "## Rules"
+            echo "- All CI failures must be fixed."
+            echo "- All change requests must be either addressed or explained."
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Fix issues
+        if: needs.setup.outputs.command == 'fix'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMPT: ${{ steps.fix-prompt.outputs.prompt }}
+        run: |
+          set -eo pipefail
+          .pr-resolver/run-agent.sh "$AGENT_TYPE" "$AGENT_MODEL" "$PROMPT"
 
       - name: Debug test
         if: needs.setup.outputs.command == 'debug'
         run: |
-          echo "Debug test passed - workflow is working" | tee claude-output.txt
+          echo "Debug test passed - workflow is working (agent: $AGENT_TYPE)" | tee claude-output.txt
 
       - name: Upload logs
         if: always()

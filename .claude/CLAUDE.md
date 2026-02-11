@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PR Automation system - include `[action]` or `[fix]` in PR body or comments to trigger Claude Code to execute plans or address review feedback. Uses GitHub Actions with self-hosted runners.
+PR Automation system - include `[action]` or `[fix]` in PR body or comments to trigger an AI coding agent to execute plans or address review feedback. Supports **Claude Code** (Anthropic) and **OpenCode/Crush** (multi-provider: Kimi, OpenAI, Gemini, etc.). Uses GitHub Actions with self-hosted runners.
 
 The workflow is defined once in this repo and called as a **reusable workflow** by other repos via `uses: GiggleLiu/pr-resolver/.github/workflows/pr-automation.yml@main`.
 
@@ -19,6 +19,8 @@ make restart                             # Restart all runners (auto-refreshes O
 make list                                # List configured repos
 make clean                               # Clean caches (saves ~3GB)
 make init-claude                         # Install Claude CLI + superpowers
+make init-opencode                       # Install OpenCode CLI
+make init-agents                         # Install all agent CLIs
 make setup-key KEY=sk-ant-...            # Set API key for all runners
 make refresh-oauth                       # Refresh OAuth token file from Keychain
 make install-refresh                     # Auto-refresh OAuth every 6h (LaunchAgent/cron)
@@ -39,11 +41,14 @@ Caller Workflow (in each repo) ──► Reusable Workflow (this repo)
 Setup Job (GitHub-hosted) ──► Set "Waiting for runner..." status
        │
        ▼
-Execute Job ──► Self-hosted Runner ──► Read OAuth token ──► Claude CLI
-       │                                                        │
-       │                                                        ▼
-       │                                                Read plan, implement,
-       │                                                commit, push
+Execute Job ──► Self-hosted Runner ──► Acquire credentials ──► run-agent.sh
+       │                                                           │
+       │                                                     ┌─────┴─────┐
+       │                                                  Claude     OpenCode
+       │                                                  Code       /Crush
+       │                                                     └─────┬─────┘
+       │                                                     Implement,
+       │                                                     commit, push
        │                                                        │
        └──── Status Check (✓/✗) ◄───────────────────────────────┘
 ```
@@ -51,8 +56,8 @@ Execute Job ──► Self-hosted Runner ──► Read OAuth token ──► Cl
 **Flow:**
 1. User creates PR with `[action]` in body OR comments `[action]` → caller workflow triggers reusable workflow
 2. Setup job (always runs on GitHub-hosted) sets pending status immediately
-3. Execute job reads OAuth from `~/.claude-oauth-token` (or uses API key), runs Claude
-4. Claude commits, pushes, and posts summary comment
+3. Execute job acquires credentials and runs the configured agent via `run-agent.sh`
+4. Agent commits, pushes, and posts summary comment
 5. Workflow reports success/failure via commit status API
 
 ## Key Files
@@ -61,6 +66,7 @@ Execute Job ──► Self-hosted Runner ──► Read OAuth token ──► Cl
 |------|---------|
 | `.github/workflows/pr-automation.yml` | Reusable workflow (workflow_call + direct triggers) |
 | `caller-workflow.yml` | Template deployed to other repos (thin caller) |
+| `run-agent.sh` | Agent wrapper script (translates agent type → CLI invocation) |
 | `runner-config.toml` | Source of truth for managed repos |
 | `Makefile` | Runner management commands |
 | `add-repo.sh` | Setup script (called by make update) |
@@ -85,11 +91,27 @@ Set these as repo variables (Settings → Variables → Actions):
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
-| `CLAUDE_MODEL` | `opus` | Claude model to use (e.g., `opus`, `sonnet`) |
+| `AGENT_TYPE` | `claude` | Agent CLI to use: `claude` or `opencode` |
+| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshot/kimi-k2.5`, `openai/gpt-5-codex`) |
+
+## Agents
+
+| Agent | CLI | Default Model | Auth |
+|-------|-----|---------------|------|
+| `claude` | Claude Code | `opus` | `ANTHROPIC_API_KEY` secret or OAuth token file |
+| `opencode` | OpenCode/Crush | `moonshot/kimi-k2.5` | Pre-configured providers (self-hosted) or API key secrets |
+
+The `run-agent.sh` wrapper translates `AGENT_TYPE` + `AGENT_MODEL` into the correct CLI invocation. Claude Code gets superpowers plugin commands; OpenCode gets generic step-by-step instructions.
 
 ## Authentication
 
+### Claude Code
+
 OAuth tokens are read from `~/.claude-oauth-token` at job time. This file is written by `make refresh-oauth` (called automatically by `make start`/`restart`). On macOS, the token is extracted from the Keychain; runner LaunchAgents can't access the Keychain directly due to `SessionCreate=true`.
+
+### OpenCode
+
+On self-hosted runners, providers are pre-configured via `opencode` → `/connect` (API keys stored in `~/.local/share/opencode/auth.json`). Default provider: Moonshot (Kimi). On GitHub-hosted runners, pass `MOONSHOT_API_KEY` or `OPENAI_API_KEY` as repo secrets.
 
 **Auto-refresh:** `make install-refresh` sets up:
 - A **pre-job hook** (`pre-job.sh`) on every runner — uses `launchctl kickstart` to trigger the refresh LaunchAgent before each job, guaranteeing a fresh token at job time
@@ -124,22 +146,29 @@ This guarantees a fresh token at every job start. The hourly LaunchAgent timer i
 # 2. Sync runners
 make update
 
-# 3. Authentication (choose one):
+# 3. Install agents
+make init-agents        # Installs both Claude Code and OpenCode
 
-# Option A: API key (pay per use, never expires)
-make setup-key KEY=sk-ant-...
+# 4. Authentication:
 
-# Option B: OAuth with Max/Pro subscription
-claude                  # Login interactively once
-make install-refresh    # Auto-refresh token every 6h
+# Claude Code (choose one):
+make setup-key KEY=sk-ant-...           # Option A: API key
+claude && make install-refresh          # Option B: OAuth
 
-# 4. Start runners (also refreshes OAuth)
+# OpenCode:
+opencode                # Launch TUI, use /connect to add providers (Moonshot, OpenAI, etc.)
+
+# 5. Start runners (also refreshes Claude OAuth)
 make restart
 ```
 
 ### GitHub-hosted Runner (Alternative)
 
-Just add `ANTHROPIC_API_KEY` to repository secrets — no other setup needed.
+Add the appropriate API key as a repository secret:
+- Claude agent: `ANTHROPIC_API_KEY`
+- OpenCode agent: `MOONSHOT_API_KEY` or `OPENAI_API_KEY`
+
+Set `AGENT_TYPE` repo variable if not using the default (`claude`).
 
 The workflow uses `runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}`:
 - If `RUNNER_TYPE=self-hosted` → uses your self-hosted runner

@@ -1,9 +1,10 @@
 #!/bin/bash
 # Add a new repo to PR automation
-# Usage: ./add-repo.sh owner/repo [ANTHROPIC_API_KEY]
+# Usage: ./add-repo.sh owner/repo [ANTHROPIC_API_KEY] [AGENT_TYPE]
 
 REPO="$1"
 API_KEY="$2"
+AGENT_TYPE_ARG="$3"
 
 # Colors
 RED='\033[0;31m'
@@ -34,11 +35,12 @@ Install it from: https://cli.github.com/
 
 # Validate input
 if [ -z "$REPO" ]; then
-    echo "Usage: $0 owner/repo [ANTHROPIC_API_KEY]"
+    echo "Usage: $0 owner/repo [ANTHROPIC_API_KEY] [AGENT_TYPE]"
     echo ""
     echo "Examples:"
     echo "  $0 myorg/myrepo"
     echo "  $0 myorg/myrepo sk-ant-..."
+    echo "  $0 myorg/myrepo '' opencode     # Use OpenCode agent (no API key)"
     exit 1
 fi
 
@@ -98,6 +100,25 @@ else
     else
         warn "  No admin access - cannot set variable"
         NEEDS_ADMIN+=("Set variable: RUNNER_TYPE=self-hosted (Settings → Variables → Actions)")
+    fi
+fi
+
+# Step 3b: Set AGENT_TYPE variable (if specified)
+if [ -n "$AGENT_TYPE_ARG" ]; then
+    echo ""
+    echo "Step 3b: Setting AGENT_TYPE variable..."
+    if gh api "repos/$REPO/actions/variables/AGENT_TYPE" &> /dev/null 2>&1; then
+        warn "  AGENT_TYPE already set, skipping"
+    else
+        if gh api "repos/$REPO/actions/variables" \
+            --method POST \
+            -f name="AGENT_TYPE" \
+            -f value="$AGENT_TYPE_ARG" > /dev/null 2>&1; then
+            info "  AGENT_TYPE=$AGENT_TYPE_ARG set"
+        else
+            warn "  No admin access - cannot set variable"
+            NEEDS_ADMIN+=("Set variable: AGENT_TYPE=$AGENT_TYPE_ARG (Settings → Variables → Actions)")
+        fi
     fi
 fi
 
