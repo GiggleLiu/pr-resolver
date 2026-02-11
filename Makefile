@@ -92,6 +92,12 @@ refresh-oauth:
 				timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true; \
 				TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
 				ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+				EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
+				NOW_MS=$$(($$(date +%s) * 1000)); \
+				if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$NOW_MS" ] 2>/dev/null; then \
+					echo "Error: Token still expired after refresh. Run 'claude' interactively to re-login."; \
+					exit 1; \
+				fi; \
 			fi; \
 			if [ -n "$$ACCESS_TOKEN" ] && [ "$$ACCESS_TOKEN" != "null" ]; then \
 				echo "$$ACCESS_TOKEN" > "$$HOME/.claude-oauth-token"; \
