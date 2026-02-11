@@ -89,8 +89,9 @@ refresh-oauth:
 			ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
 			EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
 			NOW_MS=$$(($$(date +%s) * 1000)); \
-			if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$NOW_MS" ] 2>/dev/null; then \
-				echo "Token expired, refreshing via claude CLI..."; \
+			EXPIRY_BUFFER=1800000; \
+			if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$((NOW_MS + EXPIRY_BUFFER))" ] 2>/dev/null; then \
+				echo "Token expired or expiring soon, refreshing via claude CLI..."; \
 				timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true; \
 				TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
 				ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
