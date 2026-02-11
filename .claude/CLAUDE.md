@@ -92,14 +92,14 @@ Set these as repo variables (Settings → Variables → Actions):
 |----------|---------|---------|
 | `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
 | `AGENT_TYPE` | `claude` | Agent CLI to use: `claude` or `opencode` |
-| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshot/kimi-k2.5`, `openai/gpt-5-codex`) |
+| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshotai-cn/kimi-k2.5`, `openai/gpt-5-codex`) |
 
 ## Agents
 
 | Agent | CLI | Default Model | Auth |
 |-------|-----|---------------|------|
 | `claude` | Claude Code | `opus` | `ANTHROPIC_API_KEY` secret or OAuth token file |
-| `opencode` | OpenCode/Crush | `moonshot/kimi-k2.5` | Pre-configured providers (self-hosted) or API key secrets |
+| `opencode` | OpenCode/Crush | `moonshotai-cn/kimi-k2.5` | Pre-configured providers (self-hosted) or API key secrets |
 
 The `run-agent.sh` wrapper translates `AGENT_TYPE` + `AGENT_MODEL` into the correct CLI invocation. Claude Code gets superpowers plugin commands; OpenCode gets generic step-by-step instructions.
 

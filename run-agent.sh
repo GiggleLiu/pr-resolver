@@ -8,7 +8,7 @@
 #
 # Examples:
 #   ./run-agent.sh claude opus "Fix the bug" output.txt
-#   ./run-agent.sh opencode moonshot/kimi-k2.5 "Explain this code"
+#   ./run-agent.sh opencode moonshotai-cn/kimi-k2.5 "Explain this code"
 #   ./run-agent.sh opencode openai/gpt-5-codex "Refactor the module"
 
 set -o pipefail
@@ -27,8 +27,8 @@ case "$AGENT" in
       -p "$PROMPT" 2>&1 | tee "$OUTPUT" || EXIT_CODE=$?
     ;;
   opencode)
-    opencode --model "${MODEL:-moonshot/kimi-k2.5}" \
-      -p "$PROMPT" -q 2>&1 | tee "$OUTPUT" || EXIT_CODE=$?
+    opencode run -m "${MODEL:-moonshotai-cn/kimi-k2.5}" \
+      "$PROMPT" 2>&1 | tee "$OUTPUT" || EXIT_CODE=$?
     ;;
   *)
     echo "Error: Unknown agent '$AGENT'. Supported: claude, opencode" >&2

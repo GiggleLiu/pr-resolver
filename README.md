@@ -147,7 +147,7 @@ Set these as repo variables (Settings → Variables → Actions):
 |----------|---------|---------|
 | `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
 | `AGENT_TYPE` | `claude` | Agent CLI: `claude` or `opencode` |
-| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshot/kimi-k2.5`, `openai/gpt-5-codex`) |
+| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshotai-cn/kimi-k2.5`, `openai/gpt-5-codex`) |
 
 ### Managing Multiple Repos
 
