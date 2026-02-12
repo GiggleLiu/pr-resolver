@@ -83,39 +83,47 @@ status:
 	done
 
 refresh-oauth:
-	@if [ "$$(uname)" = "Darwin" ]; then \
+	@CREDS_FILE="$$HOME/.claude/.credentials.json"; \
+	TOKEN_JSON=""; \
+	if [ "$$(uname)" = "Darwin" ]; then \
 		TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
-		if [ -n "$$TOKEN_JSON" ]; then \
-			ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
-			EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
-			NOW_MS=$$(($$(date +%s) * 1000)); \
-			EXPIRY_BUFFER=1800000; \
-			if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$((NOW_MS + EXPIRY_BUFFER))" ] 2>/dev/null; then \
-				echo "Token expired or expiring soon, refreshing via claude CLI..."; \
-				timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true; \
-				TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
-				ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
-				EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
-				NOW_MS=$$(($$(date +%s) * 1000)); \
-				if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$NOW_MS" ] 2>/dev/null; then \
-					echo "Error: Token still expired after refresh. Run 'claude' interactively to re-login."; \
-					exit 1; \
-				fi; \
-			fi; \
-			if [ -n "$$ACCESS_TOKEN" ] && [ "$$ACCESS_TOKEN" != "null" ]; then \
-				echo "$$ACCESS_TOKEN" > "$$HOME/.claude-oauth-token"; \
-				chmod 600 "$$HOME/.claude-oauth-token"; \
-				echo "OAuth token written to ~/.claude-oauth-token"; \
-			else \
-				echo "Error: Could not extract token from Keychain"; \
-				exit 1; \
-			fi; \
-		else \
-			echo "Error: No Claude credentials in Keychain. Run 'claude' to login first."; \
+	fi; \
+	if [ -z "$$TOKEN_JSON" ] && [ -f "$$CREDS_FILE" ]; then \
+		TOKEN_JSON=$$(cat "$$CREDS_FILE" 2>/dev/null || echo ""); \
+	fi; \
+	if [ -z "$$TOKEN_JSON" ]; then \
+		echo "Error: No Claude credentials found (checked Keychain and $$CREDS_FILE). Run 'claude' to login."; \
+		exit 1; \
+	fi; \
+	ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+	EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
+	NOW_MS=$$(($$(date +%s) * 1000)); \
+	EXPIRY_BUFFER=1800000; \
+	if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$((NOW_MS + EXPIRY_BUFFER))" ] 2>/dev/null; then \
+		echo "Token expired or expiring soon, refreshing via claude CLI..."; \
+		timeout 30 claude -p "ping" --max-turns 1 > /dev/null 2>&1 || true; \
+		TOKEN_JSON=""; \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			TOKEN_JSON=$$(security find-generic-password -s "Claude Code-credentials" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
+		fi; \
+		if [ -z "$$TOKEN_JSON" ] && [ -f "$$CREDS_FILE" ]; then \
+			TOKEN_JSON=$$(cat "$$CREDS_FILE" 2>/dev/null || echo ""); \
+		fi; \
+		ACCESS_TOKEN=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null); \
+		EXPIRES_MS=$$(echo "$$TOKEN_JSON" | jq -r '.claudeAiOauth.expiresAt' 2>/dev/null); \
+		NOW_MS=$$(($$(date +%s) * 1000)); \
+		if [ -n "$$EXPIRES_MS" ] && [ "$$EXPIRES_MS" -le "$$NOW_MS" ] 2>/dev/null; then \
+			echo "Error: Token still expired after refresh. Run 'claude' interactively to re-login."; \
 			exit 1; \
 		fi; \
+	fi; \
+	if [ -n "$$ACCESS_TOKEN" ] && [ "$$ACCESS_TOKEN" != "null" ]; then \
+		echo "$$ACCESS_TOKEN" > "$$HOME/.claude-oauth-token"; \
+		chmod 600 "$$HOME/.claude-oauth-token"; \
+		echo "OAuth token written to ~/.claude-oauth-token"; \
 	else \
-		echo "Not on macOS - skipping (use credentials file or API key instead)"; \
+		echo "Error: Could not extract access token from credentials"; \
+		exit 1; \
 	fi
 
 REFRESH_LABEL := com.pr-resolver.refresh-oauth
