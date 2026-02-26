@@ -118,7 +118,7 @@ jobs:
       statuses: write
 
     env:
-      AGENT_TYPE: ${{ vars.AGENT_TYPE || 'claude' }}
+      AGENT_TYPE: ${{ vars.AGENT_TYPE || 'codex' }}
       AGENT_MODEL: ${{ vars.AGENT_MODEL || vars.CLAUDE_MODEL || '' }}
 
     steps:
@@ -132,7 +132,7 @@ jobs:
               sha: '${{ needs.setup.outputs.sha }}',
               state: 'pending',
               context: 'PR Automation / ${{ needs.setup.outputs.command }}',
-              description: 'Running (${{ vars.AGENT_TYPE || 'claude' }})...',
+              description: 'Running (${{ vars.AGENT_TYPE || 'codex' }})...',
               target_url: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             });
 
@@ -154,22 +154,32 @@ jobs:
         run: chmod +x .pr-resolver/run-agent.sh
 
       - name: Setup Node.js (GitHub-hosted, claude agent)
-        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'claude'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Claude Code CLI (GitHub-hosted, claude agent)
-        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'claude'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Install superpowers plugin (GitHub-hosted, claude agent)
-        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'claude'
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'claude'
         run: claude plugin install anthropics/claude-code-superpowers
 
       - name: Install OpenCode CLI (GitHub-hosted, opencode agent)
-        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'claude') == 'opencode'
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'opencode'
         run: curl -fsSL https://opencode.ai/install.sh | bash
+
+      - name: Setup Node.js (GitHub-hosted, codex agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'codex'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Codex CLI (GitHub-hosted, codex agent)
+        if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'codex'
+        run: npm install -g @openai/codex
 
       - name: Acquire credentials
         env:
@@ -236,8 +246,27 @@ jobs:
               fi
               ;;
 
+            codex)
+              # Use OpenAI API key from secret
+              if [ -n "$OPENAI_API_KEY_SECRET" ]; then
+                echo "::add-mask::$OPENAI_API_KEY_SECRET"
+                echo "OPENAI_API_KEY=$OPENAI_API_KEY_SECRET" >> $GITHUB_ENV
+                echo "Using OpenAI API key from secret"
+                exit 0
+              fi
+
+              # Self-hosted: check if OPENAI_API_KEY is already in environment (from runner .env)
+              if [ -n "$OPENAI_API_KEY" ]; then
+                echo "Using OpenAI API key from runner environment"
+                exit 0
+              fi
+
+              echo "Error: No Codex credentials available (need OPENAI_API_KEY secret or runner env)"
+              exit 1
+              ;;
+
             *)
-              echo "Error: Unknown AGENT_TYPE '$AGENT_TYPE'. Supported: claude, opencode"
+              echo "Error: Unknown AGENT_TYPE '$AGENT_TYPE'. Supported: codex, claude, opencode"
               exit 1
               ;;
           esac
@@ -283,6 +312,8 @@ jobs:
           3. Push: git push origin $BRANCH
           4. Post summary: gh pr comment $PR_NUMBER --repo $REPO --body 'SUMMARY'"
           fi
+
+          # Note: codex and opencode both use the generic process above
 
           {
             echo 'prompt<<PROMPT_EOF'
@@ -344,6 +375,8 @@ jobs:
           else
             DEBUG_STEP="1. Analyze CI failure logs to identify root causes"
           fi
+
+          # Note: codex and opencode both use the generic debug step above
 
           {
             echo 'prompt<<PROMPT_EOF'

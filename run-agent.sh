@@ -3,13 +3,15 @@
 # Usage: ./run-agent.sh <agent> <model> <prompt> [output-file]
 #
 # Agents:
+#   codex    - OpenAI Codex CLI (default)
 #   claude   - Claude Code CLI (Anthropic models)
 #   opencode - OpenCode/Crush CLI (multi-provider: Kimi, OpenAI, Gemini, etc.)
 #
 # Examples:
+#   ./run-agent.sh codex "" "Fix the bug" output.txt          # uses default model
+#   ./run-agent.sh codex o4-mini "Fix the bug" output.txt
 #   ./run-agent.sh claude opus "Fix the bug" output.txt
 #   ./run-agent.sh opencode moonshotai-cn/kimi-k2.5 "Explain this code"
-#   ./run-agent.sh opencode openai/gpt-5-codex "Refactor the module"
 
 set -o pipefail
 
@@ -20,6 +22,12 @@ OUTPUT="${4:-claude-output.txt}"
 
 EXIT_CODE=0
 case "$AGENT" in
+  codex)
+    CODEX_ARGS=(exec --full-auto -c model_reasoning_effort=high)
+    [ -n "$MODEL" ] && CODEX_ARGS+=(-m "$MODEL")
+    codex "${CODEX_ARGS[@]}" \
+      "$PROMPT" 2>&1 | tee "$OUTPUT" || EXIT_CODE=$?
+    ;;
   claude)
     claude --dangerously-skip-permissions \
       --model "${MODEL:-opus}" \
@@ -31,7 +39,7 @@ case "$AGENT" in
       "$PROMPT" 2>&1 | tee "$OUTPUT" || EXIT_CODE=$?
     ;;
   *)
-    echo "Error: Unknown agent '$AGENT'. Supported: claude, opencode" >&2
+    echo "Error: Unknown agent '$AGENT'. Supported: codex, claude, opencode" >&2
     exit 1
     ;;
 esac

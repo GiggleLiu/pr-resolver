@@ -38,9 +38,10 @@ if [ -z "$REPO" ]; then
     echo "Usage: $0 owner/repo [ANTHROPIC_API_KEY] [AGENT_TYPE]"
     echo ""
     echo "Examples:"
-    echo "  $0 myorg/myrepo"
+    echo "  $0 myorg/myrepo                        # Uses default (codex)"
     echo "  $0 myorg/myrepo sk-ant-..."
-    echo "  $0 myorg/myrepo '' opencode     # Use OpenCode agent (no API key)"
+    echo "  $0 myorg/myrepo '' claude               # Use Claude agent"
+    echo "  $0 myorg/myrepo '' opencode              # Use OpenCode agent"
     exit 1
 fi
 

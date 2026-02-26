@@ -6,7 +6,7 @@ CONFIG_FILE := runner-config.toml
 BASE_DIR := $(shell grep 'base_dir' $(CONFIG_FILE) 2>/dev/null | head -1 | cut -d'"' -f2 | sed "s|~|$$HOME|" || echo "$$HOME/actions-runners")
 REPOS := $(shell grep -E '^\s*"[^/]+/[^"]+"' $(CONFIG_FILE) 2>/dev/null | tr -d ' ",')
 
-.PHONY: help update status start stop restart list clean init-claude init-opencode init-agents setup-key refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
+.PHONY: help update status start stop restart list clean init-codex init-claude init-opencode init-agents setup-key setup-openai-key refresh-oauth install-refresh uninstall-refresh sync-workflow round-trip
 
 help:
 	@echo "PR Resolver - Runner Management"
@@ -23,10 +23,12 @@ help:
 	@echo "  make restart                 # Restart all runners"
 	@echo "  make list                    # List configured repos"
 	@echo "  make clean                   # Clean caches (saves ~3GB)"
+	@echo "  make init-codex              # Install Codex CLI (OpenAI)"
 	@echo "  make init-claude             # Install Claude CLI + superpowers"
 	@echo "  make init-opencode           # Install OpenCode CLI"
 	@echo "  make init-agents             # Install all agent CLIs"
-	@echo "  make setup-key KEY=sk-ant-...  # Set API key for all runners"
+	@echo "  make setup-key KEY=sk-ant-...  # Set Anthropic API key for all runners"
+	@echo "  make setup-openai-key KEY=sk-...  # Set OpenAI API key for all runners"
 	@echo "  make refresh-oauth           # Refresh OAuth token file"
 	@echo "  make install-refresh         # Auto-refresh OAuth every 6h"
 	@echo "  make uninstall-refresh       # Remove auto-refresh"
@@ -238,6 +240,27 @@ setup-key:
 	done
 	@echo "Done. Run 'make restart' to apply."
 
+setup-openai-key:
+	@if [ -z "$(KEY)" ]; then \
+		echo "Error: KEY required"; \
+		echo "Usage: make setup-openai-key KEY=sk-..."; \
+		exit 1; \
+	fi
+	@echo "Setting OpenAI API key for all runners..."
+	@for dir in $(BASE_DIR)/*/; do \
+		if [ -f "$$dir/.runner" ]; then \
+			name=$$(basename "$$dir"); \
+			if grep -q "OPENAI_API_KEY" "$$dir/.env" 2>/dev/null; then \
+				sed -i.bak "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=$(KEY)|" "$$dir/.env" && rm -f "$$dir/.env.bak"; \
+				echo "  [updated] $$name"; \
+			else \
+				echo "OPENAI_API_KEY=$(KEY)" >> "$$dir/.env"; \
+				echo "  [added] $$name"; \
+			fi; \
+		fi; \
+	done
+	@echo "Done. Run 'make restart' to apply."
+
 sync-workflow:
 	@echo "Syncing caller workflow to all repos..."
 	@WORKFLOW_CONTENT=$$(cat caller-workflow.yml | base64); \
@@ -259,6 +282,18 @@ sync-workflow:
 		fi; \
 	done
 	@echo "Done."
+
+init-codex:
+	@echo "Checking Codex CLI setup..."
+	@echo ""
+	@if command -v codex &> /dev/null; then \
+		echo "Codex CLI: $$(codex --version 2>/dev/null || echo 'installed')"; \
+	else \
+		echo "Codex CLI: not found, installing..."; \
+		npm install -g @openai/codex; \
+	fi
+	@echo ""
+	@echo "Done. Set OPENAI_API_KEY via 'make setup-openai-key KEY=sk-...' or run 'codex login'."
 
 init-claude:
 	@echo "Checking Claude CLI and superpowers setup..."
@@ -291,7 +326,7 @@ init-opencode:
 	@echo ""
 	@echo "Done. Run 'opencode' and use /connect to add providers (e.g., Moonshot for Kimi)."
 
-init-agents: init-claude init-opencode
+init-agents: init-codex init-claude init-opencode
 	@echo ""
 	@echo "All agents installed."
 

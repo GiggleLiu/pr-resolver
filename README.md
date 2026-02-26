@@ -2,7 +2,7 @@
 
 GitHub Action runner that **uses AI coding agents to implement your plans.** Write a plan, open a PR, comment `[action]` — the agent executes it.
 
-Supports **Claude Code** (Anthropic) and **OpenCode/Crush** (multi-provider: Kimi, OpenAI, Gemini, etc.) — configurable per repo.
+Supports **Codex** (OpenAI, default), **Claude Code** (Anthropic), and **OpenCode/Crush** (multi-provider: Kimi, OpenAI, Gemini, etc.) — configurable per repo.
 
 **Purposes**
 
@@ -57,7 +57,7 @@ The workflow needs a GitHub Actions runner. Choose one:
 git clone https://github.com/GiggleLiu/pr-resolver.git
 cd pr-resolver
 
-# Install agent CLIs (Claude Code + OpenCode)
+# Install agent CLIs (Codex + Claude Code + OpenCode)
 make init-agents
 
 # Add your repo to config (edit runner-config.toml, add to repos array)
@@ -66,6 +66,9 @@ make init-agents
 make update
 
 # Authentication:
+
+# Codex (default):
+make setup-openai-key KEY=sk-...  # Set OpenAI API key
 
 # Claude Code (choose one):
 make setup-key KEY=sk-ant-...     # Option A: API key (pay per use)
@@ -80,10 +83,11 @@ make restart                      # Starts runners (also refreshes token)
 #### GitHub-hosted
 
 Add the appropriate API key as a repo secret (Settings → Secrets → Actions):
+- Codex agent (default): `OPENAI_API_KEY`
 - Claude agent: `ANTHROPIC_API_KEY`
 - OpenCode agent: `MOONSHOT_API_KEY` or `OPENAI_API_KEY`
 
-Set `AGENT_TYPE` repo variable if not using the default (`claude`). No other setup needed — the workflow defaults to GitHub-hosted runners.
+Set `AGENT_TYPE` repo variable if not using the default (`codex`). No other setup needed — the workflow defaults to GitHub-hosted runners.
 
 ### 3. Try it
 
@@ -146,8 +150,8 @@ Set these as repo variables (Settings → Variables → Actions):
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `RUNNER_TYPE` | `ubuntu-latest` | Set to `self-hosted` for self-hosted runners |
-| `AGENT_TYPE` | `claude` | Agent CLI: `claude` or `opencode` |
-| `AGENT_MODEL` | (agent default) | Model override (e.g., `opus`, `moonshotai-cn/kimi-k2.5`, `openai/gpt-5-codex`) |
+| `AGENT_TYPE` | `codex` | Agent CLI: `codex`, `claude`, or `opencode` |
+| `AGENT_MODEL` | (agent default) | Model override (e.g., `gpt-5.3-codex`, `opus`, `moonshotai-cn/kimi-k2.5`) |
 
 ### Managing Multiple Repos
 
@@ -167,10 +171,12 @@ repos = [
 make update                    # Sync: add missing runners, remove unlisted
 make status                    # Check all runner statuses
 make start / stop / restart    # Control runners
-make setup-key KEY=sk-ant-...  # Set API key for all runners
+make setup-key KEY=sk-ant-...  # Set Anthropic API key for all runners
+make setup-openai-key KEY=sk-...  # Set OpenAI API key for all runners
 make refresh-oauth             # Manually refresh OAuth token file
 make install-refresh           # Auto-refresh OAuth every 6h
 make sync-workflow             # Install caller workflow to all repos
+make init-codex                # Install Codex CLI (OpenAI)
 make init-claude               # Install Claude CLI + superpowers
 make init-opencode             # Install OpenCode CLI
 make init-agents               # Install all agent CLIs
@@ -191,10 +197,10 @@ Setup Job (GitHub-hosted) ──► Set pending status
        ▼
 Execute Job (self-hosted) ──► Acquire credentials ──► run-agent.sh
        │                                                    │
-       │                                              ┌─────┴─────┐
-       │                                           Claude     OpenCode
-       │                                           Code       /Crush
-       │                                              └─────┬─────┘
+       │                                               ┌────┼─────┐
+       │                                             Codex  Claude OpenCode
+       │                                                    Code   /Crush
+       │                                               └────┼─────┘
        └──── Status Check (✓/✗) ◄──────────────────────────┘
 ```
 
@@ -208,6 +214,10 @@ Execute Job (self-hosted) ──► Acquire credentials ──► run-agent.sh
 **Reusable workflow**: Other repos reference this repo's workflow via `@main`. Updates to the workflow logic propagate automatically — no need to sync workflow files.
 
 ## Authentication
+
+### Codex (default)
+
+Set `OPENAI_API_KEY` in the runner environment via `make setup-openai-key KEY=sk-...`, or add it as a repo secret for GitHub-hosted runners. Alternatively, run `codex login` interactively on self-hosted runners.
 
 ### Claude Code
 
@@ -233,9 +243,11 @@ On GitHub-hosted runners, add the provider API key as a repo secret (`MOONSHOT_A
 ## Requirements
 
 - **Agent CLI** (at least one):
+  - [Codex](https://github.com/openai/codex) (default) - `make init-codex`
   - [Claude Code](https://claude.ai/code) - `make init-claude`
   - [OpenCode/Crush](https://opencode.ai/) - `make init-opencode`
 - **Authentication** (depends on agent):
+  - Codex: [OpenAI API key](https://platform.openai.com/) or ChatGPT subscription OAuth
   - Claude: [Anthropic API key](https://console.anthropic.com/) or Max/Pro OAuth
   - OpenCode: Provider API key (Moonshot, OpenAI, etc.)
 - [GitHub CLI](https://cli.github.com/) (`gh`) - for runner setup
