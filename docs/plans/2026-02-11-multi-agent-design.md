@@ -34,7 +34,7 @@ Examples:
 ### OpenCode
 
 - **Self-hosted**: Pre-configured providers via `opencode.json` + API keys in `~/.local/share/opencode/auth.json`. Default provider: Moonshot (Kimi OAuth).
-- **GitHub-hosted**: Provider API key passed as secret (e.g., `MOONSHOT_API_KEY`, `OPENAI_API_KEY`), configured via env vars at job time.
+- **GitHub-hosted**: Provider API key passed as secret (e.g., `MOONSHOT_API_KEY`, `ZHIPU_API_KEY`, `OPENAI_API_KEY`), configured via env vars at job time.
 
 OpenCode provider config on self-hosted runner (`~/.config/opencode/opencode.json`):
 ```json
@@ -101,6 +101,7 @@ Error detection (after the agent exits):
     ANTHROPIC_API_KEY_SECRET: ${{ secrets.ANTHROPIC_API_KEY }}
     MOONSHOT_API_KEY_SECRET: ${{ secrets.MOONSHOT_API_KEY }}
     OPENAI_API_KEY_SECRET: ${{ secrets.OPENAI_API_KEY }}
+    ZHIPU_API_KEY_SECRET: ${{ secrets.ZHIPU_API_KEY }}
   run: |
     case "$AGENT_TYPE" in
       claude)
@@ -111,6 +112,8 @@ Error detection (after the agent exits):
         # GitHub-hosted: pass API key from secret
         if [ -n "$MOONSHOT_API_KEY_SECRET" ]; then
           echo "MOONSHOT_API_KEY=$MOONSHOT_API_KEY_SECRET" >> $GITHUB_ENV
+        elif [ -n "$ZHIPU_API_KEY_SECRET" ]; then
+          echo "ZHIPU_API_KEY=$ZHIPU_API_KEY_SECRET" >> $GITHUB_ENV
         elif [ -n "$OPENAI_API_KEY_SECRET" ]; then
           echo "OPENAI_API_KEY=$OPENAI_API_KEY_SECRET" >> $GITHUB_ENV
         fi

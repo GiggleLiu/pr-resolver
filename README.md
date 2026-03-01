@@ -85,7 +85,7 @@ make restart                      # Starts runners (also refreshes token)
 Add the appropriate API key as a repo secret (Settings → Secrets → Actions):
 - Codex agent (default): `OPENAI_API_KEY`
 - Claude agent: `ANTHROPIC_API_KEY`
-- OpenCode agent: `MOONSHOT_API_KEY` or `OPENAI_API_KEY`
+- OpenCode agent: `MOONSHOT_API_KEY`, `ZHIPU_API_KEY`, or `OPENAI_API_KEY`
 
 Set `AGENT_TYPE` repo variable if not using the default (`codex`). No other setup needed — the workflow defaults to GitHub-hosted runners.
 
@@ -238,7 +238,7 @@ Set `OPENAI_API_KEY` in the runner environment via `make setup-openai-key KEY=sk
 
 On self-hosted runners, configure providers interactively: `opencode` → `/connect` → select provider (Moonshot, OpenAI, etc.) → enter API key. Keys persist in `~/.local/share/opencode/auth.json`.
 
-On GitHub-hosted runners, add the provider API key as a repo secret (`MOONSHOT_API_KEY` or `OPENAI_API_KEY`).
+On GitHub-hosted runners, add the provider API key as a repo secret (`MOONSHOT_API_KEY`, `ZHIPU_API_KEY`, or `OPENAI_API_KEY`).
 
 ## Requirements
 

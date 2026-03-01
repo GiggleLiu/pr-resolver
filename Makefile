@@ -324,7 +324,7 @@ init-opencode:
 		curl -fsSL https://opencode.ai/install.sh | bash; \
 	fi
 	@echo ""
-	@echo "Done. Run 'opencode' and use /connect to add providers (e.g., Moonshot for Kimi)."
+	@echo "Done. Run 'opencode' and use /connect to add providers (e.g., Moonshot, Zhipu/GLM, OpenAI)."
 
 init-agents: init-codex init-claude init-opencode
 	@echo ""
