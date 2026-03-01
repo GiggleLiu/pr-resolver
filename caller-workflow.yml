@@ -19,7 +19,7 @@ jobs:
         contains(github.event.pull_request.body, '[fix]') ||
         contains(github.event.pull_request.body, '[debug]')))
     uses: GiggleLiu/pr-resolver/.github/workflows/pr-automation.yml@main
-    secrets: inherit  # Passes ANTHROPIC_API_KEY, MOONSHOT_API_KEY, OPENAI_API_KEY
+    secrets: inherit  # Passes ANTHROPIC_API_KEY, MOONSHOT_API_KEY, OPENAI_API_KEY, ZHIPU_API_KEY
     permissions:
       contents: write
       pull-requests: write
