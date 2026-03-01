@@ -321,7 +321,7 @@ init-opencode:
 		echo "OpenCode: $$(opencode --version 2>/dev/null || echo 'installed')"; \
 	else \
 		echo "OpenCode: not found, installing..."; \
-		curl -fsSL https://opencode.ai/install.sh | bash; \
+		curl -fsSL https://opencode.ai/install | bash; \
 	fi
 	@echo ""
 	@echo "Done. Run 'opencode' and use /connect to add providers (e.g., Moonshot for Kimi)."
