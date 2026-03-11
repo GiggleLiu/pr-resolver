@@ -102,7 +102,7 @@ Set these as repo variables (Settings → Variables → Actions):
 |-------|-----|---------------|------|
 | `codex` | OpenAI Codex | `gpt-5.3-codex` | `OPENAI_API_KEY` secret or runner env |
 | `claude` | Claude Code | `opus` | `ANTHROPIC_API_KEY` secret or OAuth token file |
-| `opencode` | OpenCode/Crush | `moonshotai-cn/kimi-k2.5` | Pre-configured providers (self-hosted) or API key secrets |
+| `opencode` | OpenCode/Crush | `moonshotai-cn/kimi-k2.5` | Pre-configured providers (self-hosted) or MOONSHOT_API_KEY/ZHIPU_API_KEY/OPENAI_API_KEY secrets |
 
 The `run-agent.sh` wrapper translates `AGENT_TYPE` + `AGENT_MODEL` into the correct CLI invocation. Claude Code gets superpowers plugin commands; Codex and OpenCode get generic step-by-step instructions.
 
@@ -118,7 +118,7 @@ OAuth tokens are read from `~/.claude-oauth-token` at job time. This file is wri
 
 ### OpenCode
 
-On self-hosted runners, providers are pre-configured via `opencode` → `/connect` (API keys stored in `~/.local/share/opencode/auth.json`). Default provider: Moonshot (Kimi). On GitHub-hosted runners, pass `MOONSHOT_API_KEY` or `OPENAI_API_KEY` as repo secrets.
+On self-hosted runners, providers are pre-configured via `opencode` → `/connect` (API keys stored in `~/.local/share/opencode/auth.json`). Default provider: Moonshot (Kimi). On GitHub-hosted runners, pass `MOONSHOT_API_KEY`, `ZHIPU_API_KEY`, or `OPENAI_API_KEY` as repo secrets.
 
 **Auto-refresh:** `make install-refresh` sets up:
 - A **pre-job hook** (`pre-job.sh`) on every runner — uses `launchctl kickstart` to trigger the refresh LaunchAgent before each job, guaranteeing a fresh token at job time
@@ -177,7 +177,7 @@ make restart
 Add the appropriate API key as a repository secret:
 - Codex agent (default): `OPENAI_API_KEY`
 - Claude agent: `ANTHROPIC_API_KEY`
-- OpenCode agent: `MOONSHOT_API_KEY` or `OPENAI_API_KEY`
+- OpenCode agent: `MOONSHOT_API_KEY`, `ZHIPU_API_KEY`, or `OPENAI_API_KEY`
 
 Set `AGENT_TYPE` repo variable if not using the default (`codex`).
 
