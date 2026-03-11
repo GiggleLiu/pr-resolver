@@ -169,7 +169,7 @@ jobs:
 
       - name: Install OpenCode CLI (GitHub-hosted, opencode agent)
         if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'opencode'
-        run: curl -fsSL https://opencode.ai/install.sh | bash
+        run: curl -fsSL https://opencode.ai/install | bash
 
       - name: Setup Node.js (GitHub-hosted, codex agent)
         if: vars.RUNNER_TYPE != 'self-hosted' && (vars.AGENT_TYPE || 'codex') == 'codex'
